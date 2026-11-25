@@ -9,7 +9,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { ServiceError, fail, sha256, intVar } from './util.js';
 import { makeProvider } from './providers.js';
 
-const MIN_START_SECONDS = 60;          // need at least 1 credit to start
+const MIN_START_SECONDS = 60;          // need at least 1 credit to start (MIN_START_SECONDS overrides, tests only)
 const CREATE_TIMEOUT_MS = 120000;
 const TICK_MS = 5000;                  // alarm cadence while a session is open
 const POLL_ATTEMPTS = 8, POLL_DELAY_MS = 500;
@@ -23,6 +23,7 @@ export class AccountObject extends DurableObject {
     super(ctx, env);
     this.sql = ctx.storage.sql; this.now = () => Date.now(); this.finishing = new Map();
     this.heartbeatTimeoutMs = intVar(env.HEARTBEAT_TIMEOUT_MS, 30000);
+    this.minStartSeconds = Math.max(1, intVar(env.MIN_START_SECONDS, MIN_START_SECONDS));
     this.sql.exec(`
       CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
       CREATE TABLE IF NOT EXISTS purchases (id TEXT PRIMARY KEY, source TEXT NOT NULL, ref TEXT NOT NULL UNIQUE, seconds INTEGER NOT NULL, note TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL);
@@ -100,7 +101,7 @@ export class AccountObject extends DurableObject {
   // ---- sessions ----
   async createSession({ image }) {
     const { balance } = this.totals();
-    if (balance < MIN_START_SECONDS) fail(402, 'QUOTA_EXHAUSTED', '余额不足 1 分钟，请先充值');
+    if (balance < this.minStartSeconds) fail(402, 'QUOTA_EXHAUSTED', '余额不足 1 分钟，请先充值');
     if (this.openSession()) fail(409, 'SESSION_ACTIVE', '上一场会话尚未结束确认，请先结束');
     const provider = this.provider(), id = crypto.randomUUID(), now = this.now();
     // Insert before the upstream await so a concurrent request sees an open session.

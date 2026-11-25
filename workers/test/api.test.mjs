@@ -1,39 +1,12 @@
-// End-to-end tests against a real local `wrangler dev` (workerd + local D1 +
-// Durable Objects + simulated email). Fake provider only: no network, no cost.
+// End-to-end tests against a real local `wrangler dev`. Fake provider only: no network, no cost.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn, execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { startWorker, IMAGE, sleep } from './harness.mjs';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const PORT = 8790 + Math.floor(Math.random() * 100), BASE = `http://127.0.0.1:${PORT}`;
-const STATE = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-workers-test-'));
-const IMAGE = 'data:image/png;base64,iVBORw0KGgo=';
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-let server;
-
-const call = async (method, route, body, token) => {
-  const response = await fetch(BASE + route, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
-  return { status: response.status, body: await response.json() };
-};
-const ok = async (...args) => { const result = await call(...args); assert.equal(result.status, 200, JSON.stringify(result.body)); return result.body; };
-const d1 = sql => execFileSync('npx', ['wrangler', 'd1', 'execute', 'DB', '--local', '--persist-to', STATE, '--command', sql], { cwd: ROOT, stdio: 'pipe' });
-async function login(email) {
-  await ok('POST', '/v1/auth/email/code', { email });
-  return ok('POST', '/v1/auth/email/login', { email, code: '000000' });
-}
-
-before(async () => {
-  execFileSync('npx', ['wrangler', 'd1', 'migrations', 'apply', 'DB', '--local', '--persist-to', STATE], { cwd: ROOT, stdio: 'pipe' });
-  server = spawn('npx', ['wrangler', 'dev', '--port', String(PORT), '--persist-to', STATE, '--var', 'DEV_LOGIN:1', '--var', 'TRIAL_SECONDS:120', '--var', 'HEARTBEAT_TIMEOUT_MS:6000', '--var', 'PROVIDER:fake'], { cwd: ROOT, stdio: 'ignore', detached: true });
-  for (let i = 0; i < 60; i++) { try { if ((await fetch(BASE + '/v1/plans')).ok) return; } catch { /* starting */ } await sleep(500); }
-  throw new Error('wrangler dev did not start');
-}, { timeout: 60000 });
-after(() => { try { process.kill(-server.pid); } catch { /* gone */ } fs.rmSync(STATE, { recursive: true, force: true }); });
+let w; const call = (...a) => w.call(...a), ok = (...a) => w.ok(...a), d1 = sql => w.d1(sql), login = email => w.login(email);
+before(async () => { w = await startWorker({ TRIAL_SECONDS: '120', HEARTBEAT_TIMEOUT_MS: '6000' }); }, { timeout: 60000 });
+after(() => w?.stop());
 
 test('email login: validation, resend limit, wrong code, trial credit, same account on re-login', async () => {
   assert.equal((await call('POST', '/v1/auth/email/code', { email: 'not-an-email' })).body.code, 'BAD_EMAIL');

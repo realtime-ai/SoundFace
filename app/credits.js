@@ -19,13 +19,13 @@ function redeemHint(text, error = false, ok = false) {
 function drawPlans() {
   const list = $('plan-list'); list.replaceChildren();
   for (const plan of planCache?.plans || []) {
-    const item = document.createElement('div'); item.className = 'plan';
+    const item = document.createElement('div'); item.className = 'plan'; item.setAttribute('role', 'listitem');
     const name = document.createElement('strong'); name.textContent = plan.name;
     const price = document.createElement('span'); price.textContent = `¥${plan.priceYuan}`;
     const credits = document.createElement('small'); credits.textContent = `${plan.credits} 分钟`;
     item.append(name, price, credits); list.append(item);
   }
-  if (planCache?.purchaseHint) $('purchase-hint').textContent = '如何购买：' + planCache.purchaseHint;
+  if (planCache?.purchaseHint) $('purchase-hint').textContent = '如何购买：' + planCache.purchaseHint + '。购买后会收到兑换码，在下面输入即可到账。';
 }
 (() => {
   $('recharge-open').onclick = () => openRecharge();
