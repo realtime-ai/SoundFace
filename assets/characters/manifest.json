@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "characters": [
+    { "id": "qinghe", "name": "青禾", "file": "../default-character.jpg", "tag": "自然清爽", "description": "自然、清爽的出镜身份，保留你的动作与表情。" },
+    { "id": "tangtang", "name": "糖糖", "file": "01-tangtang.jpg", "tag": "甜美主播", "description": "甜美主播，保留你的动作与表情。" },
+    { "id": "manning", "name": "曼宁", "file": "02-manning.jpg", "tag": "气场御姐", "description": "气场御姐，保留你的动作与表情。" },
+    { "id": "lengyue", "name": "冷月", "file": "03-lengyue.jpg", "tag": "酷飒时尚", "description": "酷飒时尚，保留你的动作与表情。" },
+    { "id": "naicha", "name": "奈茶", "file": "04-naicha.jpg", "tag": "韩系美妆", "description": "韩系美妆，保留你的动作与表情。" },
+    { "id": "ruanruan", "name": "软软", "file": "05-ruanruan.jpg", "tag": "纯欲风", "description": "纯欲风，保留你的动作与表情。" },
+    { "id": "xiaoye", "name": "小野", "file": "06-xiaoye.jpg", "tag": "活力辣妹", "description": "活力辣妹，保留你的动作与表情。" },
+    { "id": "jinse", "name": "锦瑟", "file": "07-jinse.jpg", "tag": "轻奢名媛", "description": "轻奢名媛，保留你的动作与表情。" },
+    { "id": "hongdou", "name": "红豆", "file": "08-hongdou.jpg", "tag": "国风主播", "description": "国风主播，保留你的动作与表情。" }
+  ]
+}

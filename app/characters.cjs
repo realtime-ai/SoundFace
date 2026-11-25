@@ -28,9 +28,28 @@ function validateReference(data) {
   if (Math.min(width, height) < 128 || Math.max(width, height) > 4096 || width * height > 16_000_000 || width / height < 0.25 || width / height > 4) throw new Error('图片边长需为 128–4096 像素，长宽比不超过 4:1。');
   return { width, height };
 }
+const builtinID = /^[a-z][a-z0-9-]{1,31}$/;
+// Built-in characters come from assets/characters/manifest.json, so adding or
+// removing one only touches assets and the manifest. Files must stay in assets/.
+function loadBuiltinManifest(manifestPath, assetsRoot) {
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const root = path.resolve(assetsRoot), seen = new Set(), result = [];
+  for (const item of Array.isArray(manifest.characters) ? manifest.characters : []) {
+    if (!item || !builtinID.test(item.id) || seen.has(item.id) || customID.test(item.id)) continue;
+    if (typeof item.name !== 'string' || !item.name.trim() || item.name.length > 20 || typeof item.file !== 'string') continue;
+    const file = path.resolve(path.dirname(manifestPath), item.file);
+    if (!file.startsWith(root + path.sep) || !/\.(jpe?g|png)$/i.test(file)) continue;
+    seen.add(item.id);
+    result.push({ id: item.id, name: item.name.trim(), file, thumbnail: '../assets/' + path.relative(root, file).split(path.sep).join('/'),
+      tag: typeof item.tag === 'string' ? item.tag.slice(0, 20) : '', description: typeof item.description === 'string' ? item.description.slice(0, 80) : '保留你的动作与表情。' });
+  }
+  return result;
+}
 class CharacterLibrary {
-  constructor({ directory, defaultImage, normalize, trash }) {
+  constructor({ directory, defaultImage, normalize, trash, builtins }) {
     Object.assign(this, { directory, defaultImage, normalize, trash });
+    // Without a manifest, fall back to the single original default character.
+    this.builtins = new Map((builtins && builtins.length ? builtins : [{ id: 'qinghe', name: '青禾', file: defaultImage, thumbnail: '../assets/default-character.jpg', tag: '', description: '自然、清爽的出镜身份，保留你的动作与表情。' }]).map(item => [item.id, item]));
     fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
     this.records = new Map(); this.reload();
   }
@@ -50,13 +69,14 @@ class CharacterLibrary {
       } catch { /* Ignore incomplete or invalid local records. */ }
     }
   }
-  list() { return [{ id: 'qinghe', name: '青禾', thumbnail: '../assets/default-character.jpg', source: 'builtin', description: '自然、清爽的出镜身份，保留你的动作与表情。' }, ...this.records.values()]; }
-  has(id) { return id === 'qinghe' || this.records.has(id); }
+  list() { return [...[...this.builtins.values()].map(({ id, name, thumbnail, tag, description }) => ({ id, name, thumbnail, tag, description, source: 'builtin' })), ...this.records.values()]; }
+  has(id) { return this.builtins.has(id) || this.records.has(id); }
   image(id) {
     if (!this.has(id)) throw new Error('该角色不可用，请重新选择。');
-    const file = id === 'qinghe' ? this.defaultImage : path.join(this.directory, id, 'reference.jpg');
+    const builtin = this.builtins.get(id), file = builtin ? builtin.file : path.join(this.directory, id, 'reference.jpg');
     const data = fs.readFileSync(file); validateReference(data);
-    return 'data:image/jpeg;base64,' + data.toString('base64');
+    const png = data.subarray(0, 4).equals(Buffer.from([137, 80, 78, 71]));
+    return `data:image/${png ? 'png' : 'jpeg'};base64,` + data.toString('base64');
   }
   importFile(file) {
     if (this.records.size >= 12) throw new Error('最多保存 12 个自定义角色，请先移除不需要的角色。');
@@ -77,4 +97,4 @@ class CharacterLibrary {
     await this.trash(path.join(this.directory, id)); this.records.delete(id); return this.list();
   }
 }
-module.exports = { CharacterLibrary, validateReference };
+module.exports = { CharacterLibrary, validateReference, loadBuiltinManifest };

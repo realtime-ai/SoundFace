@@ -41,7 +41,7 @@ function renderCharacters() {
     const image = document.createElement('img'); image.src = item.thumbnail; image.alt = item.name + '角色参考图';
     const info = document.createElement('span'); info.className = 'character-info';
     const name = document.createElement('strong'); name.textContent = item.name;
-    const source = document.createElement('small'); source.textContent = item.source === 'builtin' ? 'SoundFace 默认角色' : '我的参考图';
+    const source = document.createElement('small'); source.textContent = item.source === 'builtin' ? (item.tag || 'SoundFace 默认角色') : '我的参考图';
     const check = document.createElement('span'); check.className = 'selection-check'; check.textContent = '✓';
     info.append(name, source); button.append(image, info, check); grid.append(button);
   }
@@ -83,7 +83,9 @@ function cloudDraw() {
   for (const id of ['selected-character-image', 'idle-character-image']) if ($(id).getAttribute('src') !== selected.thumbnail) $(id).src = selected.thumbnail;
   $('remove-character').hidden = selected.source !== 'custom'; $('remove-character').disabled = active || cloudState.billing === 'unknown';
   document.querySelector('[data-action="import"]').disabled = active || cloudState.billing === 'unknown';
-  $('cloud-status').textContent = !cloudState.configured ? '云端服务暂不可用，请稍后重试。' : (cloudState.phase === 'ended' && !cloudState.frames ? (cloudState.closeReason === 'live_ended' ? '生成连接中断 · 未收到画面' : '已停止 · 尚未收到生成画面') : cloudNames[cloudState.phase] || cloudState.phase) + (cloudState.billing === 'ended' ? ' · 云端结束已确认' : cloudState.billing === 'unknown' ? ' · 云端结束未确认' : '');
+  const account = cloudState.account;
+  $('session-limit').textContent = account ? `账号 ${account.name} · 剩余 ${Math.floor(account.remainingSeconds / 60)} 分 ${account.remainingSeconds % 60} 秒 · 按实际生成时长扣除` : '手动结束 · 按实际生成时长计费';
+  $('cloud-status').textContent = !cloudState.configured ? '尚未登录 SoundFace 账号，暂不能开启数字人。' : (cloudState.phase === 'ended' && !cloudState.frames ? (cloudState.closeReason === 'live_ended' ? '生成连接中断 · 未收到画面' : '已停止 · 尚未收到生成画面') : cloudNames[cloudState.phase] || cloudState.phase) + (cloudState.billing === 'ended' ? ' · 云端结束已确认' : cloudState.billing === 'unknown' ? ' · 云端结束未确认' : '');
   if (cloudState.frames > 0 || cloudState.billing === 'ended') {
     const elapsed = cloudState.startedAt ? Math.max(0, (Date.now() - cloudState.startedAt) / 1000).toFixed(0) : 0;
     $('cloud-metrics').textContent = `${cloudState.frames > 0 ? `${cloudState.width} × ${cloudState.height} · 已显示 ${cloudState.frames} 帧 · 首帧 ${(cloudState.firstFrameMs / 1000).toFixed(1)} 秒` : '尚未收到生成帧'}${active ? ` · 已运行 ${elapsed} 秒` : ''}${cloudState.billedSeconds != null ? ` · 账单 ${cloudState.billedSeconds} 秒 / ${cloudState.creditsCost} 积分` : ''}`;
@@ -162,7 +164,9 @@ async function beginCloud({ output = false } = {}) {
     await engine.setLocalViewConfig($('camera-preview'), 1); check();
     await engine.startPreview(); check();
     $('camera-preview').classList.add('source-inset'); $('camera-preview').hidden = false;
-    const credentials = await api.startCloud(character); check();
+    const { transport } = await api.startCloud(character); check();
+    // Provider-neutral seam: the server names the real-time channel to join.
+    if (transport.type !== 'alirtc') throw new Error(`当前版本暂不支持该实时通道（${String(transport.type).replace(/[^a-z0-9-]/gi, '').slice(0, 20)}）`);
     frameCount = 0; lastFrameAt = 0; awaitingFrameAt = Date.now();
     heartbeatTimer = setInterval(() => {
       const waitingTooLong = !frameCount && Date.now() - awaitingFrameAt > 25000;
@@ -171,7 +175,7 @@ async function beginCloud({ output = false } = {}) {
       void api.cloudHeartbeat({ frames: frameCount, width: $('cloud-preview').videoWidth, height: $('cloud-preview').videoHeight }).catch(() => {});
     }, 1000);
     engine.on('videoSubscribeStateChanged', (uid, _old, state) => {
-      if (String(uid) !== credentials.renderUid || generation !== cloudGeneration) return;
+      if (String(uid) !== transport.renderUid || generation !== cloudGeneration) return;
       void api.cloudDiagnostic({ stage: 'render-subscription', code: state });
       if (state !== 3) { framePump.reset(); if (frameCallback != null) $('cloud-preview').cancelVideoFrameCallback(frameCallback); frameCallback = null; $('cloud-preview').hidden = true; $('ai-label').hidden = true; return; }
       const element = $('cloud-preview');
@@ -193,7 +197,7 @@ async function beginCloud({ output = false } = {}) {
       void element.play().catch(error => { if (error.name === 'NotAllowedError') message('请点击预览区域播放生成视频'); });
     });
     engine.on('remoteUserOffLineNotify', (uid, reason) => {
-      if (String(uid) === credentials.renderUid && generation === cloudGeneration) {
+      if (String(uid) === transport.renderUid && generation === cloudGeneration) {
         void api.cloudDiagnostic({ stage: 'render-offline', code: reason });
         framePump.reset(); if (frameCallback != null) $('cloud-preview').cancelVideoFrameCallback(frameCallback); frameCallback = null;
         $('cloud-preview').hidden = true; $('ai-label').hidden = true;
@@ -201,18 +205,18 @@ async function beginCloud({ output = false } = {}) {
         // handles failure without tearing down a recoverable subscription.
       }
     });
-    engine.on('remoteUserOnLineNotify', uid => { if (String(uid) === credentials.renderUid) void api.cloudDiagnostic({ stage: 'render-online', code: 'ok' }); });
+    engine.on('remoteUserOnLineNotify', uid => { if (String(uid) === transport.renderUid) void api.cloudDiagnostic({ stage: 'render-online', code: 'ok' }); });
     engine.on('connectionStatusChange', (...args) => void api.cloudDiagnostic({ stage: 'rtc-connection', code: args.filter(value => typeof value === 'number').join('-') }));
     engine.on('videoPublishStateChanged', (...args) => void api.cloudDiagnostic({ stage: 'video-publish', code: args.filter(value => typeof value === 'number').join('-') }));
     engine.on('authInfoExpired', () => { if (generation === cloudGeneration) { message('云端凭证已过期'); void endCloud(); } });
     engine.on('bye', code => { if (generation === cloudGeneration) void endCloud('rtc-bye-' + code); });
-    await engine.joinChannel(credentials.rtc.token, credentials.rtc.user_id); check();
+    await engine.joinChannel(transport.token, transport.userId); check();
     void api.cloudDiagnostic({ stage: 'rtc-joined', code: 'ok' });
     await engine.publishLocalVideoStream(true); check();
   } catch (error) {
     void api.cloudDiagnostic({ stage: 'start-error', code: error.code || error.name || 'unknown' });
     if (generation === cloudGeneration) {
-      message(error.message?.startsWith('Vidu') || ['验证已取消', '当前 Electron 环境不支持阿里云 RTC'].includes(error.message) ? error.message : `视频连接失败${error.code ? ' · ' + error.code : ''}：${error.name || '请检查网络及摄像头权限'}`);
+      message(error.message?.startsWith('Vidu') || error.message?.startsWith('当前版本暂不支持') || /登录|剩余时长|尚未结束|服务/.test(error.message || '') || ['验证已取消', '当前 Electron 环境不支持阿里云 RTC'].includes(error.message) ? error.message : `视频连接失败${error.code ? ' · ' + error.code : ''}：${error.name || '请检查网络及摄像头权限'}`);
       await endCloud();
     }
   }
@@ -248,6 +252,8 @@ api.onCloud(state => {
 });
 api.onCloudDiagnostic(events => { connectionEvents = events; draw(); });
 renderCharacters();
+api.cloudState().then(state => { if (!cloudActive()) { cloudState = state; draw(); } }).catch(() => {});
+api.listCharacters().then(list => { if (Array.isArray(list) && list.length) { characters = list; renderCharacters(); draw(); } }).catch(() => {});
 api.status().then(status => { cloudState = status.cloud; rtcTransport = status.cloud.transport || 'auto'; connectionEvents = status.cloudDiagnostics || []; characters = status.characters || characters; if (cloudState.characterId && characters.some(item => item.id === cloudState.characterId)) character = cloudState.characterId; renderCharacters(); draw(); }).catch(error => message(error.message));
 let beauty = false;
 $('beauty-toggle').onclick = () => {

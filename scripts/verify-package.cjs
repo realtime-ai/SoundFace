@@ -3,7 +3,6 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 const { listPackage, extractFile } = require('@electron/asar');
-const { loadCloudKey } = require('../app/service-config.cjs');
 const root = path.resolve(__dirname, '..');
 const bundle = path.join(root, `dist/SoundFace-darwin-${process.arch}/SoundFace.app`);
 const resources = path.join(bundle, 'Contents/Resources');
@@ -12,8 +11,8 @@ const files = listPackage(archive);
 assert.ok(files.includes('/app/main.cjs'));
 assert.ok(files.includes('/assets/default-character.jpg'));
 assert.deepEqual(extractFile(archive, 'assets/icons/soundface.png'), fs.readFileSync(path.join(root, 'assets/icons/soundface.png')), 'Packaged brand image is stale');
-const serviceKey = loadCloudKey(path.join(root, '.soundface-local/cloud.json'));
-if (serviceKey) assert.ok(loadCloudKey(path.join(resources, 'cloud-runtime.json'), {}) === serviceKey, 'Bundled service configuration is missing or stale');
+// Provider credentials must never ship in the app; the SoundFace server owns them.
+assert.ok(!fs.existsSync(path.join(resources, 'cloud-runtime.json')), 'Provider credentials must not be bundled');
 assert.ok(!extractFile(archive, 'app/index.html').toString().includes('key-dialog'), 'User-facing credential entry must not return');
 assert.ok(!files.some(file => /(?:^|\/)\.env(?:\.|$)|(?:^|\/)\.git(?:\/|$)|\.log$/.test(file)));
 for (const file of files.filter(file => /\.(?:cjs|js|json|html|css)$/.test(file))) {

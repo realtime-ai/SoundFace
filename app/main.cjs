@@ -1,15 +1,16 @@
-const { app, BrowserWindow, ipcMain, shell, systemPreferences, session, dialog, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, systemPreferences, session, dialog, nativeImage, safeStorage } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
 const { randomUUID } = require('node:crypto');
 const { AudioBridge } = require('./audio.cjs');
 const { CaptureController } = require('./capture-controller.cjs');
-const { ViduSession } = require('./vidu.cjs');
+const { CloudSession } = require('./cloud-session.cjs');
+const { ProxyBackend } = require('./cloud-backend.cjs');
 const { CameraExtension } = require('./camera-extension.cjs');
 const { GeneratedVideoRelay } = require('./generated-video.cjs');
-const { CharacterLibrary } = require('./characters.cjs');
-const { loadCloudKey } = require('./service-config.cjs');
+const { CharacterLibrary, loadBuiltinManifest } = require('./characters.cjs');
+const { loadServiceConfig } = require('./service-config.cjs');
 const { ConnectionTrace } = require('./connection-trace.cjs');
 
 const root = path.join(__dirname, '..');
@@ -40,7 +41,11 @@ app.whenReady().then(async () => {
   let cameraNative;
   try { cameraNative = require(path.join(resources, 'soundface-camera.node')); } catch { /* Report unavailable through status. */ }
   cameraExtension = new CameraExtension(cameraNative);
+  let builtins = [];
+  try { builtins = loadBuiltinManifest(path.join(root, 'assets/characters/manifest.json'), path.join(root, 'assets')); }
+  catch (error) { console.error('内置角色清单读取失败：' + error.message); }
   characters = new CharacterLibrary({
+    builtins,
     directory: path.join(app.getPath('userData'), 'characters'), defaultImage: path.join(root, 'assets/default-character.jpg'), trash: file => shell.trashItem(file),
     normalize: (data, size) => {
       let image = nativeImage.createFromBuffer(data);
@@ -49,7 +54,26 @@ app.whenReady().then(async () => {
       return { image: image.toJPEG(90), thumbnail: 'data:image/jpeg;base64,' + image.resize({ width: 160, quality: 'best' }).toJPEG(75).toString('base64') };
     }
   });
-  cloud = new ViduSession({ key: loadCloudKey(app.isPackaged ? path.join(resources, 'cloud-runtime.json') : path.join(root, '.soundface-local/cloud.json')), image: id => characters.image(id), characterExists: id => characters.has(id) });
+  const serviceConfig = loadServiceConfig({ isPackaged: app.isPackaged });
+  const backend = new ProxyBackend({ baseUrl: serviceConfig.baseUrl });
+  cloud = new CloudSession({ backend, image: id => characters.image(id), characterExists: id => characters.has(id) });
+  // Login token persisted with the OS keychain-backed safeStorage; never sent to the renderer.
+  const tokenFile = path.join(app.getPath('userData'), 'account-token.bin');
+  const saveToken = token => { try { if (!token) fs.rmSync(tokenFile, { force: true }); else if (safeStorage.isEncryptionAvailable()) fs.writeFileSync(tokenFile, safeStorage.encryptString(token), { mode: 0o600 }); } catch { /* Stay logged in for this run only. */ } };
+  const publishAccount = () => cloud.publish({});
+  if (serviceConfig.devUser) backend.login('dev', { name: serviceConfig.devUser }).then(publishAccount).catch(error => console.error('SoundFace 开发登录失败：' + error.message));
+  else {
+    try { if (fs.existsSync(tokenFile) && safeStorage.isEncryptionAvailable()) backend.restore(safeStorage.decryptString(fs.readFileSync(tokenFile))); } catch { saveToken(''); }
+    if (backend.token) backend.refreshAccount().then(publishAccount).catch(error => { if (error.status === 401) { backend.logout(); saveToken(''); } publishAccount(); });
+  }
+  const phoneBody = (phone, code) => {
+    if (typeof phone !== 'string' || phone.length > 20 || (code !== undefined && (typeof code !== 'string' || code.length > 10))) throw new Error('输入无效');
+    return code === undefined ? { phone } : { phone, code };
+  };
+  const requireNoSession = () => { if (cloud.starting || cloud.stopping || cloud.live || cloud.state.billing === 'unknown') throw new Error('请先结束当前数字人会话。'); };
+  handle('account-code', phone => backend.requestCode('sms', phoneBody(phone)));
+  handle('account-login', async (phone, code) => { requireNoSession(); const account = await backend.login('sms', phoneBody(phone, code)); saveToken(backend.token); publishAccount(); return account.name; });
+  handle('account-logout', () => { requireNoSession(); backend.logout(); saveToken(''); publishAccount(); return true; });
   const connectionTrace = new ConnectionTrace();
   const rtcTransport = process.env.SOUNDFACE_RTC_TRANSPORT === 'tcp' ? 'tcp' : 'auto';
   const persistConnectionTrace = () => {
@@ -92,9 +116,10 @@ app.whenReady().then(async () => {
     return true;
   });
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
-    callback(webContents === window?.webContents && details.isMainFrame && details.requestingUrl === uiURL && permission === 'media' && details.mediaTypes?.length > 0 && details.mediaTypes.every(type => type === 'video'));
+    // Video for the camera; audio only for the clip recorder's microphone track.
+    callback(webContents === window?.webContents && details.isMainFrame && details.requestingUrl === uiURL && permission === 'media' && details.mediaTypes?.length > 0 && details.mediaTypes.every(type => type === 'video' || type === 'audio'));
   });
-  session.defaultSession.setPermissionCheckHandler((webContents, permission, _origin, details) => webContents === window?.webContents && details.isMainFrame && details.requestingUrl === uiURL && permission === 'media' && details.mediaType === 'video');
+  session.defaultSession.setPermissionCheckHandler((webContents, permission, _origin, details) => webContents === window?.webContents && details.isMainFrame && details.requestingUrl === uiURL && permission === 'media' && (details.mediaType === 'video' || details.mediaType === 'audio'));
   handle('status', async () => {
     const [devices, cameras] = await Promise.all([bridge.command('list'), videoBridge.command('list')]);
     return {
@@ -138,6 +163,9 @@ app.whenReady().then(async () => {
     const character = characters.importFile(result.filePaths[0]);
     return { character, characters: characters.list() };
   });
+  // Separate from 'status' so the library loads even if a native helper is unavailable.
+  handle('characters-list', () => characters.list());
+  handle('cloud-state', () => ({ ...cloud.snapshot(), transport: rtcTransport }));
   handle('characters-remove', id => { requireIdleCharacters(); return characters.remove(id); });
   handle('cloud-start', characterId => { if (audio.state.privacy) throw new Error('请先退出隐私暂停'); return cloud.start(characterId); });
   handle('cloud-stop', () => cloud.stop());
@@ -150,6 +178,18 @@ app.whenReady().then(async () => {
     return audio.snapshot();
   });
   handle('camera-permission', () => systemPreferences.askForMediaAccess('camera'));
+  handle('clip-mic-permission', () => systemPreferences.askForMediaAccess('microphone'));
+  handle('clip-save', async bytes => {
+    if (!(bytes instanceof Uint8Array) || bytes.length < 8 || bytes.length > 512 * 1024 * 1024) throw new Error('片段数据无效');
+    if (Buffer.from(bytes.subarray(4, 8)).toString('latin1') !== 'ftyp') throw new Error('片段不是 MP4 格式');
+    const now = new Date(), pad = value => String(value).padStart(2, '0'), stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    // Dev-only: automated checks save without a native dialog.
+    if (!app.isPackaged && process.env.SOUNDFACE_CLIP_DIR) { const file = path.join(process.env.SOUNDFACE_CLIP_DIR, `SoundFace-${stamp}.mp4`); await fs.promises.writeFile(file, bytes); return file; }
+    const result = await dialog.showSaveDialog(window, { title: '保存竖屏片段', buttonLabel: '保存', defaultPath: path.join(app.getPath('videos'), `SoundFace-${stamp}.mp4`), filters: [{ name: 'MP4 视频', extensions: ['mp4'] }] });
+    if (result.canceled || !result.filePath) return null;
+    await fs.promises.writeFile(result.filePath, bytes);
+    return result.filePath;
+  });
   handle('install-audio', async () => {
     if (audio.state.running) throw new Error('请先停止麦克风输出再安装组件。');
     const installer = app.isPackaged ? path.join(resources, 'SoundFace-Microphone-dev.pkg') : path.join(root, 'dist/SoundFace-Microphone-dev.pkg');
@@ -164,7 +204,16 @@ app.whenReady().then(async () => {
   handle('open-guide', () => shell.openPath(app.isPackaged ? path.join(resources, 'DEVELOPMENT.md') : path.join(root, 'docs/DEVELOPMENT.md')));
   window = new BrowserWindow({ width: 1240, height: 900, minWidth: 960, minHeight: 720, title: 'SoundFace', icon: path.join(root, 'assets/icons/soundface.png'), backgroundColor: '#f2f5f3', titleBarStyle: 'hiddenInset', webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false } });
   if (!app.isPackaged && process.platform === 'darwin') app.dock.setIcon(path.join(root, 'assets/icons/soundface.png'));
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  // Only the live output popup may open: a blank same-origin window that the
+  // renderer draws into. Every other window.open is denied.
+  window.webContents.setWindowOpenHandler(({ url, frameName }) => url === 'about:blank' && frameName === 'soundface-live'
+    ? { action: 'allow', overrideBrowserWindowOptions: { width: 960, height: 540, minWidth: 320, minHeight: 180, title: 'SoundFace 直播画面', frame: false, backgroundColor: '#000000', show: true, fullscreenable: true, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } } }
+    : { action: 'deny' });
+  window.webContents.on('did-create-window', child => {
+    child.setAspectRatio(16 / 9);
+    child.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    child.webContents.on('will-navigate', event => event.preventDefault());
+  });
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.on('render-process-gone', () => { audio.close(); video.close(); void cloud.stop('界面已退出'); });
   window.webContents.on('unresponsive', () => { audio.close(); video.close(); void cloud.stop('界面失去响应'); });

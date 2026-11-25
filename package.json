@@ -11,7 +11,8 @@
     "build:camera": "bash scripts/build-camera.sh",
     "build": "npm run build:audio && npm run build:camera && node scripts/package.cjs",
     "test": "bash scripts/test-camera.sh && node --test tests/*.test.cjs && bash scripts/test-ring.sh && bash scripts/test-resampler.sh",
-    "verify:package": "node scripts/verify-package.cjs"
+    "verify:package": "node scripts/verify-package.cjs",
+    "server": "SOUNDFACE_DEV_LOGIN=1 node server/index.cjs"
   },
   "devDependencies": {
     "@electron/packager": "20.3.0",

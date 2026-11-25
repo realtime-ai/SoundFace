@@ -91,11 +91,10 @@ dist/SoundFace-darwin-arm64/SoundFace.app/Contents/MacOS/SoundFace --diagnose
 
 当前采用 S2 Editing `subject_replacement`，显式设置 `editing_type`。内置 `assets/default-character.jpg` 是原创虚构成年角色，直接以 base64 data URI 作为 `image_url` 传入，不依赖公开图床。
 
-1. 选择青禾或导入自己的参考图，直接点击「开启数字人并输出」。收到真实生成帧并确认云端 live 后，自动接通虚拟摄像头；若摄像头组件不可用或当前选择物理输出，则为「开启数字人预览」。可以独立停止摄像头输出而继续生成，再手动恢复输出。应用自动读取服务配置，用户界面不提供连接设置或密钥输入，也无配置密钥的 IPC。开发配置位于被 Git 忽略的 `.soundface-local/cloud.json`（`apiKey` 字段），也可通过开发者环境变量 `VIDU_API_KEY` 覆盖。打包时注入 `Contents/Resources/cloud-runtime.json`，仅主进程读取；渲染进程只能看到 configured 布尔状态。配置缺失或无效时，显示服务暂不可用，不引导用户配置。不要打印密钥或放入源码。
+1. 选择青禾或导入自己的参考图，直接点击「开启数字人并输出」。收到真实生成帧并确认云端 live 后，自动接通虚拟摄像头；若摄像头组件不可用或当前选择物理输出，则为「开启数字人预览」。可以独立停止摄像头输出而继续生成，再手动恢复输出。客户端不再持有生成服务的 Key：会话由 SoundFace 服务端创建（见下节“服务端代理”），客户端只拿到这场会话的实时通道参数和控制通道的短期 `client_secret`。打包脚本不再注入 `cloud-runtime.json`，`verify:package` 会检查安装包里没有它。
 
-   当前开发包按产品要求内置服务凭证，可从安装包提取，不能作为生产环境的密钥保护方案。正式发行应改为服务端创建会话、鉴权与用量控制；源码压缩包不包含 `.soundface-local` 或构建配置。
-2. 本地摄像头先完成授权和采集检查，再创建会话。REST Authorization 直接使用 Key，不带 Token 前缀；WebSocket 只使用这场会话的短期 `client_secret`。
-3. `conn_init_ack.success=true` 后开始计费。主进程持有 WebSocket 和界面心跳；客户端不再设置会话时长上限，由用户手动停止；渲染进程仅收到临时 RTC 凭证。AliRTC 7.3.4 只发布视频，不发布/订阅音频，Electron 权限处理器也不允许网页请求音频。
+2. 本地摄像头先完成授权和采集检查，再请服务端创建会话。服务端调用上游时 REST Authorization 直接使用 Key，不带 Token 前缀；客户端的 WebSocket 只使用这场会话的短期 `client_secret`。
+3. `conn_init_ack.success=true` 后开始计费。主进程持有 WebSocket 和界面心跳；客户端不再设置会话时长上限，由用户手动停止；渲染进程仅收到临时 RTC 凭证。AliRTC 7.3.4 只发布视频，不发布/订阅音频。Electron 权限处理器只为竖屏片段录制放行主界面的麦克风，数字人会话本身不使用音频。
 4. 只有 `render_uid` 视频流的 `requestVideoFrameCallback` 收到实际帧才显示「实时生成」。右下角是本地输入对照，AI 合成标识常驻。25 秒没有首帧或收到帧后停滞 10 秒会结束测试。
 5. 手动停止、隐私暂停、退出、界面崩溃/失去心跳会结束会话。先停止本地 tracks，再退出并销毁 RTC；发送 type=5 挂断，用 `GET /live/v1/lives/{id}` 确认 `status=ended` 并展示 `billed_seconds` / `credits_cost`。查询未成功时显示「结束未确认」，阻止创建另一场并允许重试结束。
 
@@ -115,6 +114,50 @@ SDK 固定版本随应用打包，出处和 SHA-256 在 `app/vendor/NOTICE.txt`�
 - https://help.aliyun.com/zh/live/quick-use
 - https://help.aliyun.com/zh/live/set-local-audio-and-video-properties
 - https://developer.apple.com/documentation/coremediaio/creating-a-camera-extension-with-core-media-i-o
+
+## 服务端代理：账号、额度与会话
+
+`server/` 是 SoundFace 服务端（只用 Node 内置模块，无运行时依赖），不打进桌面安装包。
+
+- 启动（开发）：`npm run server`，即 `SOUNDFACE_DEV_LOGIN=1 node server/index.cjs`，监听 `127.0.0.1:8787`，数据存在 `.soundface-local/server.json`（JSON 文件，上线前要换数据库）。
+- 桌面端开发版：`SOUNDFACE_DEV_USER=<名字> npm start` 自动用开发登录连本地服务；`SOUNDFACE_SERVER_URL` 可改地址（非本机必须 https）。打包版忽略这两个环境变量，开发登录在打包版不可用。
+- 上游默认是模拟服务商 `fake`：不联网、不花钱，按创建到挂断的整秒数计费。真实服务商需要同时设置 `SOUNDFACE_PROVIDER=vidu`、`SOUNDFACE_ALLOW_PAID=1` 和 `VIDU_API_KEY`，缺一不可；Key 只在服务端。
+- 额度：新账号默认 600 秒（`SOUNDFACE_DEFAULT_QUOTA`）。剩余不足 60 秒拒绝开新会话；每个账号同时只能有一场会话，上一场未确认结束时拒绝新会话。
+- 结算：挂断后轮询上游，确认 `ended` 才按上游计费秒数扣额度，且只扣一次；上游没给计费秒数时按实际时长向上取整。未确认的记为 `unknown`，阻止新会话，由回收任务重试。
+- 回收任务（每 10 秒）：客户端 30 秒无心跳（`client_lost`）、或本场时长达到剩余额度（`quota_reached`）时，服务端主动挂断；同时重试 `unknown`；创建超过 120 秒仍停在 `creating` 的记录（服务端在创建途中崩溃）标记为失败，避免账号被卡住。客户端从会话创建起每 5 秒向服务端保活（包括等待上游初始化期间），从心跳返回得知会话被服务端结束时，提示“时长已用完”等原因并停止。
+- 风险：Vidu 的服务端挂断靠用同一 `conn_id` 重连控制通道再发挂断信号，依赖平台未公开的重连宽限期；超过宽限期可能挂不掉，需要向平台确认是否有 REST 结束接口。
+- 服务商抽象：服务商实现 `create / hangup / status`（`server/providers/`）。`create` 返回与服务商无关的 `{ transport, control }`：`transport.type` 告诉客户端加入哪种实时通道（目前 `alirtc`；接 Xmax 时增加声网/腾讯/火山类型并在 `app/cloud-renderer.js` 增加对应接入），`control.type` 为 `vidu-ws` 或 `none`。客户端遇到不支持的通道类型会提示并结束会话。
+- 登录：`server/auth.cjs` 中可替换的登录方式。桌面端是“手机号 + 短信验证码”登录框（数字人卡片里的“登录”）。短信服务商未定：`SmsAuthenticator` 的发送器可替换，目前只有开发用的 `DevSmsSender`（不发短信，验证码固定 000000，界面会提示）；验证码 5 分钟有效、60 秒内不能重发、最多试 5 次、一次性。开发服务端还有按名字登录（`POST /v1/auth/dev/login`，桌面端用 `SOUNDFACE_DEV_USER`）。两种开发登录都只在服务端设置 `SOUNDFACE_DEV_LOGIN=1` 时注册。登录凭证由主进程用系统钥匙串（Electron safeStorage）加密保存在 userData，不传给界面；重启后自动恢复，失效时自动退出。
+- 接口：`POST /v1/auth/:method/code`、`POST /v1/auth/:method/login`、`GET /v1/me`、`POST /v1/sessions`、`POST /v1/sessions/:id/heartbeat`、`POST /v1/sessions/:id/hangup`、`GET /v1/sessions/:id`。
+- 尚未做：接入真实短信服务商、支付和充值、部署与监控、数据库、跨重启的会话恢复（服务端回收任务已覆盖客户端异常退出）。
+
+## 直播画面窗口（OBS 窗口采集）
+
+工作台右侧“直播画面”卡片可以打开独立窗口“SoundFace 直播画面”，供 OBS 等直播软件用窗口采集抓取。这条路径不依赖虚拟摄像头扩展。
+
+- 画面固定为 1280 × 720 画布，窗口按 16:9 缩放，最高 30 fps。窗口无边框，拖动画面任意位置即可移动窗口。
+- 只会画两种内容：数字人生成画面（叠加 AI GENERATED 标识），或勾选“使用本地测试画面”时的本地合成画面（叠加 LOCAL TEST 标识，不连云端、不开摄像头）。
+- 生成画面超过 250 ms 没有新帧（`LIVE_STALE_MS`，沿用虚拟摄像头路径的值，直播中网络抖动可能导致频繁闪占位，待实测调整）、会话未处于 live、隐私暂停时，一律显示“稍后回来”占位画面。摄像头原始画面不是这个窗口的输入。
+- OBS：来源 → 添加“macOS 屏幕采集”，方式选“窗口采集”，窗口选“SoundFace 直播画面”。窗口被最小化时，系统会暂停绘制，OBS 也拿不到新画面，请保持窗口可见。窗口被其他窗口完全挡住时是否仍持续刷新，尚待在 OBS 中实测。
+- 相关代码：`app/live-output.js`（选源和合成）、`app/live-window.js`（窗口与刷新）、`app/main.cjs` 中只放行名为 `soundface-live` 的空白子窗口。
+
+## 竖屏片段录制
+
+工作台右侧“竖屏片段”卡片录制 9:16 短视频，直接导出 MP4（H.264 + AAC，由 Electron 自带的 MediaRecorder 编码，不需要 ffmpeg）。
+
+- 画面 720 × 1280、30 fps，约 6 Mbps；最长 60 秒，到时自动停止；停止后弹出保存对话框，默认保存到“影片”文件夹。
+- 画面来源与直播画面窗口相同：数字人生成画面或本地测试画面，横屏画面居中裁成 9:16。没有新帧时显示占位画面。摄像头原始画面不是输入。
+- 当前云端输出 952 × 544，裁切后只有约 306 × 544，放大后明显模糊，不适合直接发布；待云端输出 1080p 或竖屏后改善。
+- “变身”转场（默认开）：开头约 1.6 秒，先显示所选 AI 角色参考图的重度模糊暗化版本，再从模糊过渡到清晰的生成画面。参考图是 JPG，没有透明通道，所以不是真正的剪影；需要剪影效果要另做人像分割。
+- 每一帧都烧录 AI 标识（右上）和“SoundFace 声面”品牌角标（左下）。
+- 可选录入麦克风声音（系统默认麦克风，关闭回声消除、降噪和自动增益）。麦克风经过一个延迟节点再录入，用来抵消生成画面的云端延迟，延迟值 `CLIP_AUDIO_DELAY_MS`（`app/clip-recorder.js`）目前为 0，待实测后填入。隐私暂停会立即停止录制并释放麦克风。
+- 开发调试：设置环境变量 `SOUNDFACE_CLIP_DIR` 后（仅未打包的开发版），片段直接保存到该目录，不弹对话框。
+- “前后对照”转场（转场下拉框里选）：开头约 2.6 秒，先显示一个通用剪影（与用户本人无关，摄像头画面不进入导出），再从左到右擦出生成画面，标注 BEFORE / AFTER。剪影是可替换素材位：放一张 `assets/compare-before.png` 即替换内置的矢量剪影；没有这个文件时用内置剪影。
+- 相关代码：`app/clip-composer.js`（裁切、转场、标识）、`app/clip-recorder.js`（录制与保存）、`app/main.cjs` 中的 `clip-save`。
+
+## 内置角色清单
+
+内置角色由 `assets/characters/manifest.json` 决定，增删角色只改该目录下的图片和清单，不改代码；来源说明见 `assets/characters/SOURCES.md`。清单里的 `file` 只能指向 `assets/` 内的 JPG/PNG，`id` 为小写字母、数字和短横线，不能与自定义角色冲突；不合规的条目会被跳过。清单缺失或读取失败时只保留青禾。打包脚本会复制整个 `assets/characters/`。当前 8 个角色为测试素材（AI 生成，2026-11-25），尚未在真实数字人会话中试过。
 
 ## 许可与分发
 

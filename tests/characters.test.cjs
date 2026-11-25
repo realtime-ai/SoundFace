@@ -45,3 +45,35 @@ test('tampered metadata and symlink folders cannot become selectable characters'
   const reloaded = new CharacterLibrary(f.options);
   assert.deepEqual(reloaded.list().map(item => item.id), ['qinghe']);
 });
+test('built-in characters come from the manifest and resolve to their own files', t => {
+  const { loadBuiltinManifest } = require('../app/characters.cjs');
+  const assets = path.resolve(__dirname, '../assets');
+  const builtins = loadBuiltinManifest(path.join(assets, 'characters/manifest.json'), assets);
+  assert.ok(builtins.length >= 2); assert.equal(builtins[0].id, 'qinghe');
+  const f = fixture(t), library = new CharacterLibrary({ ...f.options, builtins });
+  for (const item of builtins) {
+    assert.ok(library.has(item.id));
+    assert.equal(library.image(item.id), 'data:image/jpeg;base64,' + fs.readFileSync(item.file).toString('base64'));
+    assert.ok(fs.existsSync(path.join(assets, item.thumbnail.replace('../assets/', ''))), item.thumbnail);
+  }
+  assert.deepEqual(library.list().filter(item => item.source === 'builtin').map(item => item.id), builtins.map(item => item.id));
+  assert.ok(!JSON.stringify(library.list()).includes(assets), 'no absolute paths over IPC');
+});
+test('manifest entries cannot escape assets/ or collide with custom IDs', t => {
+  const { loadBuiltinManifest } = require('../app/characters.cjs');
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'soundface-manifest-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const assets = path.join(directory, 'assets'); fs.mkdirSync(path.join(assets, 'characters'), { recursive: true });
+  fs.copyFileSync(reference, path.join(assets, 'characters/ok.jpg'));
+  fs.writeFileSync(path.join(assets, 'characters/manifest.json'), JSON.stringify({ characters: [
+    { id: 'ok', name: '好', file: 'ok.jpg' }, { id: 'ok', name: '重复', file: 'ok.jpg' },
+    { id: 'escape', name: '越界', file: '../../secret.jpg' }, { id: 'custom-00000000-0000-0000-0000-000000000000', name: '冒充', file: 'ok.jpg' },
+    { id: 'notimage', name: '非图片', file: 'manifest.json' }, { id: 'Bad ID', name: '坏', file: 'ok.jpg' }
+  ] }));
+  assert.deepEqual(loadBuiltinManifest(path.join(assets, 'characters/manifest.json'), assets).map(item => item.id), ['ok']);
+});
+test('without a manifest the library still offers the original default character', t => {
+  const f = fixture(t);
+  assert.deepEqual(f.library.list().filter(item => item.source === 'builtin').map(item => item.id), ['qinghe']);
+  assert.ok(f.library.image('qinghe').startsWith('data:image/jpeg;base64,'));
+});

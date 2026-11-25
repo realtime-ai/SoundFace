@@ -1,14 +1,17 @@
-const fs = require('node:fs');
-
-// App-owned configuration only. Never expose this object through IPC.
-function loadCloudKey(file, environment = process.env) {
-  let key = environment.VIDU_API_KEY;
-  if (!key && file) {
-    try {
-      if (fs.statSync(file).size <= 4096) key = JSON.parse(fs.readFileSync(file, 'utf8')).apiKey;
-    } catch { /* A build without service configuration remains usable locally. */ }
-  }
-  return typeof key === 'string' && /^vda_[A-Za-z0-9_]{20,200}$/.test(key.trim()) ? key.trim() : '';
+// App-owned service configuration. The client holds no provider API key: it
+// only knows where the SoundFace server is. Development-only login is
+// available exclusively in unpackaged builds and only when explicitly enabled.
+function loadServiceConfig({ isPackaged, environment = process.env, packagedUrl = '' }) {
+  const fromEnv = environment.SOUNDFACE_SERVER_URL;
+  const candidate = !isPackaged && fromEnv ? fromEnv : isPackaged ? packagedUrl : 'http://127.0.0.1:8787';
+  let baseUrl = '';
+  try {
+    const url = new URL(candidate);
+    const local = ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname);
+    if (url.protocol === 'https:' || (url.protocol === 'http:' && local && !isPackaged)) baseUrl = url.origin;
+  } catch { /* Unconfigured build: cloud features report unavailable. */ }
+  const devUser = !isPackaged && /^[A-Za-z0-9_-]{2,32}$/.test(environment.SOUNDFACE_DEV_USER || '') ? environment.SOUNDFACE_DEV_USER : '';
+  return { baseUrl, devUser };
 }
 
-module.exports = { loadCloudKey };
+module.exports = { loadServiceConfig };
