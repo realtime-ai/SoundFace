@@ -1,0 +1,6 @@
+Aliyun ARTC Web SDK 7.3.4
+Official distribution: https://g.alicdn.com/apsara-media-box/imp-web-rtc/7.3.4/aliyun-rtc-sdk.js
+Documentation: https://help.aliyun.com/zh/live/quick-use
+Downloaded 2026-10-16; upstream file is unmodified.
+SHA-256: 46b57790f4539150f45c6ab3f113e9ed0b73e756fd3c97a0d6813c99628ba6d1
+Third-party SDK; its upstream terms apply. Not authored by SoundFace.

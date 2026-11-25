@@ -1,0 +1,14 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const { execFileSync } = require('node:child_process');
+const root = path.resolve(__dirname, '..');
+const source = path.join(root, `dist/SoundFace-darwin-${process.arch}/SoundFace.app`);
+const target = path.join(root, 'dist/camera-test/SoundFace.app');
+fs.rmSync(target, { recursive: true, force: true });
+fs.mkdirSync(path.dirname(target), { recursive: true });
+execFileSync('ditto', [source, target]);
+execFileSync('codesign', ['--force', '--sign', '-', '--entitlements', path.join(root, 'native/camera/Host.entitlements'), target], { stdio: 'inherit' });
+execFileSync('codesign', ['--verify', '--deep', '--strict', target], { stdio: 'inherit' });
+execFileSync('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', target, path.join(root, `dist/SoundFace-Camera-Test-${process.arch}.zip`)]);
+console.log('Camera development artifact:', target);
+console.log('Restricted entitlements: use only in the explicitly prepared development test environment. Not a signed/notarized release.');

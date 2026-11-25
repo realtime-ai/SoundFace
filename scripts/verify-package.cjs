@@ -1,0 +1,37 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const { execFileSync } = require('node:child_process');
+const { listPackage, extractFile } = require('@electron/asar');
+const { loadCloudKey } = require('../app/service-config.cjs');
+const root = path.resolve(__dirname, '..');
+const bundle = path.join(root, `dist/SoundFace-darwin-${process.arch}/SoundFace.app`);
+const resources = path.join(bundle, 'Contents/Resources');
+const archive = path.join(resources, 'app.asar');
+const files = listPackage(archive);
+assert.ok(files.includes('/app/main.cjs'));
+assert.ok(files.includes('/assets/default-character.jpg'));
+assert.deepEqual(extractFile(archive, 'assets/icons/soundface.png'), fs.readFileSync(path.join(root, 'assets/icons/soundface.png')), 'Packaged brand image is stale');
+const serviceKey = loadCloudKey(path.join(root, '.soundface-local/cloud.json'));
+if (serviceKey) assert.ok(loadCloudKey(path.join(resources, 'cloud-runtime.json'), {}) === serviceKey, 'Bundled service configuration is missing or stale');
+assert.ok(!extractFile(archive, 'app/index.html').toString().includes('key-dialog'), 'User-facing credential entry must not return');
+assert.ok(!files.some(file => /(?:^|\/)\.env(?:\.|$)|(?:^|\/)\.git(?:\/|$)|\.log$/.test(file)));
+for (const file of files.filter(file => /\.(?:cjs|js|json|html|css)$/.test(file))) {
+  const packed = extractFile(archive, file.slice(1));
+  const content = packed.toString();
+  if (file.startsWith('/app/')) assert.deepEqual(packed, fs.readFileSync(path.join(root, file.slice(1))), `Packaged source is stale: ${file}`);
+  assert.ok(!/vda_[a-zA-Z0-9_]{20,}/.test(content), `Credential-like value found in ${file}`);
+}
+for (const file of ['soundface-audio', 'soundface-video', 'soundface-camera.node', 'SoundFace-Microphone-dev.pkg', 'DEVELOPMENT.md', 'BlackHole-LICENSE', 'BlackHole-source.tar.gz', 'SoundFaceConfig.h']) assert.ok(fs.existsSync(path.join(resources, file)), file);
+for (const file of ['soundface-audio', 'soundface-video', 'soundface-camera.node']) assert.deepEqual(fs.readFileSync(path.join(resources, file)), fs.readFileSync(path.join(root, 'build', file)), `Packaged native binary is stale: ${file}`);
+assert.ok(fs.existsSync(path.join(bundle, 'Contents/Library/SystemExtensions/app.soundface.camera.systemextension/Contents/MacOS/SoundFaceCamera')));
+execFileSync('codesign', ['--verify', '--deep', '--strict', bundle]);
+const info = JSON.parse(execFileSync('plutil', ['-convert', 'json', '-o', '-', path.join(bundle, 'Contents/Info.plist')], { encoding: 'utf8' }));
+assert.equal(info.CFBundleIdentifier, 'app.soundface.desktop');
+const bundleIcon = info.CFBundleIconFile.endsWith('.icns') ? info.CFBundleIconFile : info.CFBundleIconFile + '.icns';
+assert.deepEqual(fs.readFileSync(path.join(resources, bundleIcon)), fs.readFileSync(path.join(root, 'assets/icons/SoundFace.icns')), 'Bundle icon is missing or stale');
+assert.ok(info.NSMicrophoneUsageDescription); assert.ok(info.NSCameraUsageDescription);
+const payload = execFileSync('pkgutil', ['--payload-files', path.join(root, 'dist/SoundFace-Microphone-dev.pkg')], { encoding: 'utf8' });
+assert.ok(payload.includes('Library/Audio/Plug-Ins/HAL/SoundFace.driver/Contents/MacOS/SoundFace'));
+assert.ok(!payload.includes('BlackHole.driver'));
+console.log('PASS packaged source and app-owned service configuration match workspace; no user credential entry; native resources, signature, and source credential exclusion');
