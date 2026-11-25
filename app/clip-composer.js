@@ -94,7 +94,7 @@ class ClipComposer {
       ctx.fillStyle = '#120a1d'; ctx.fillRect(0, 0, CLIP_WIDTH, CLIP_HEIGHT);
       if (crop) ctx.drawImage(element, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, CLIP_WIDTH, CLIP_HEIGHT);
       ctx.restore();
-      ctx.fillStyle = '#ff2d87'; ctx.fillRect(split - 3, 0, 6, CLIP_HEIGHT);
+      ctx.fillStyle = '#e0457b'; ctx.fillRect(split - 3, 0, 6, CLIP_HEIGHT);
     }
     ctx.font = '600 36px sans-serif'; ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
     if (split < CLIP_WIDTH - 140) { ctx.textAlign = 'right'; ctx.fillText('BEFORE', CLIP_WIDTH - 32, 140); }
@@ -107,7 +107,7 @@ class ClipComposer {
   drawMarks(source) {
     const ctx = this.context;
     // AI label (always) and brand corner, burned into every exported frame.
-    ctx.fillStyle = 'rgba(255, 45, 135, 0.85)'; ctx.fillRect(CLIP_WIDTH - 300, 32, 276, 44);
+    ctx.fillStyle = 'rgba(160, 40, 90, 0.85)'; ctx.fillRect(CLIP_WIDTH - 300, 32, 276, 44);
     ctx.fillStyle = '#ffffff'; ctx.font = '20px sans-serif';
     ctx.fillText(source === 'test' ? 'LOCAL TEST · SoundFace' : 'AI GENERATED · SoundFace', CLIP_WIDTH - 286, 61);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.88)'; ctx.font = '600 30px sans-serif';

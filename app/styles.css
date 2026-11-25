@@ -10,46 +10,46 @@
 .clip-preview{display:block;width:135px;height:240px;margin:8px auto;border-radius:8px;background:#0d1612}.clip-preview[hidden]{display:none}
 .live-test-option{white-space:nowrap}.live-test-option select{flex:1;min-width:0}
 .login-form{display:flex;flex-direction:column;gap:6px;margin-top:12px;min-width:320px}.login-form input{padding:8px 10px;border:1px solid #cfd8d3;border-radius:8px;font:inherit}.login-code-row{display:flex;gap:8px}.login-code-row input{flex:1;min-width:0}.login-form .primary{margin-top:8px}
-/* ===== 秀场直播风主题（2026-11-25）：深色底 + 玫红→紫霓虹渐变 + 金色点缀。只改视觉，覆盖上方浅色规则。 ===== */
-:root{color-scheme:dark;--bg:#0d0916;--surface:#171126;--surface-2:#201733;--ink:#f4effd;--sub:#a597c4;--line:#2d2245;--mint:#ff2d87;--green:#ff7ab8;--soft:#2a1838;--amber:#ffcf5a;--pink:#ff2d87;--violet:#9b3dff;--gold:#ffcf5a;--glow:0 0 18px #ff2d8766;--grad:linear-gradient(135deg,#ff2d87 0%,#c13cff 55%,#7b4dff 100%)}
-body{background:radial-gradient(1200px 600px at 85% -10%,#3a1450 0,transparent 60%),radial-gradient(900px 500px at -10% 110%,#2a0f3a 0,transparent 60%),var(--bg);color:var(--ink)}
+/* ===== 秀场直播风主题（2026-11-25，按反馈降低霓虹感）：深色底 + 玫瑰红主色 + 金色点缀，不用发光。只改视觉，覆盖上方浅色规则。 ===== */
+:root{color-scheme:dark;--bg:#0d0916;--surface:#171126;--surface-2:#201733;--ink:#f4effd;--sub:#a597c4;--line:#2d2245;--mint:#e0457b;--green:#ff7ab8;--soft:#2a1838;--amber:#ffcf5a;--pink:#e0457b;--violet:#9b3dff;--gold:#ffcf5a;--glow:none;--grad:linear-gradient(135deg,#e0457b 0%,#a2378f 100%)}
+body{background:radial-gradient(1200px 600px at 85% -10%,#2a1236 0,transparent 60%),var(--bg);color:var(--ink)}
 button{background:var(--surface-2);border-color:var(--line);color:var(--ink)}
 button:hover{background:#2a1f42;border-color:#4a3570}
-button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible{outline-color:#ff5fa6}
-button.primary{background:var(--grad);border-color:transparent;color:#fff;box-shadow:var(--glow);text-shadow:0 1px 2px #0005}
-button.primary:hover{background:var(--grad);filter:brightness(1.12);box-shadow:0 0 26px #ff2d8799}
-button.secondary{background:#2a1838;border-color:#ff2d8755;color:#ff8cc3}
-button.secondary:hover{background:#34204a;border-color:#ff2d87aa}
+button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible{outline-color:#e0457b}
+button.primary{background:var(--grad);border-color:transparent;color:#fff;box-shadow:var(--glow);text-shadow:none}
+button.primary:hover{background:var(--grad);filter:brightness(1.08)}
+button.secondary{background:#2a1838;border-color:#e0457b55;color:#f0a0bf}
+button.secondary:hover{background:#34204a;border-color:#e0457baa}
 .titlebar{background:#120c1ee6;border-bottom-color:var(--line)}
-.titlebar-name{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.titlebar-name{color:#fff}
 .titlebar-name span,.titlebar-context,.version{color:var(--sub)}
 .version{color:var(--gold)}
 .sidebar{background:#110b1c;border-right-color:var(--line)}
 .nav{color:#8f81ad}
-.nav.selected{background:linear-gradient(135deg,#ff2d8733,#9b3dff33);color:#fff;box-shadow:inset 0 0 0 1px #ff2d8766}
+.nav.selected{background:#2a1a33;color:#fff}
 .sidebar-foot{color:#7f7299}
-.small-dot,.status-dot{background:var(--pink);box-shadow:0 0 6px var(--pink)}
+.small-dot,.status-dot{background:var(--pink);box-shadow:none}
 .eyebrow{color:var(--gold)}
 h1{color:#fff}
 .heading-divider{color:#4b3a6b}
 .heading-note{color:var(--sub)}
 .privacy{background:var(--surface-2)}
-.privacy.active{background:#ff2d87;border-color:#ff2d87;color:#fff;box-shadow:var(--glow)}
+.privacy.active{background:#e0457b;border-color:#e0457b;color:#fff;box-shadow:var(--glow)}
 .stage-column,.inspector{scrollbar-color:#3d2c5c transparent}
 .panel{background:linear-gradient(180deg,#1b1430,#150f25);border-color:var(--line);box-shadow:0 10px 30px #0006}
 .section-title svg{color:var(--pink)}
 .tag{background:#241a38;color:#b3a5d3}
-.tag.on,.tag.accent{background:linear-gradient(135deg,#ff2d8733,#9b3dff33);color:#ff9fd0;box-shadow:inset 0 0 0 1px #ff2d8755}
+.tag.on,.tag.accent{background:#3a1a2c;color:#f3a3c0}
 .tag.warning{background:#3a2a10;color:var(--gold)}
-.preview{background:radial-gradient(ellipse at 50% 0%,#5a1a6e 0,#2a0f3d 45%,#120a1d 100%)!important;box-shadow:inset 0 0 0 1px #ff2d8733}
-.reference-portrait{border-color:#ffffffcc;box-shadow:0 8px 30px #ff2d8755}
+.preview{background:radial-gradient(ellipse at 50% 0%,#3d1a44 0,#21102c 45%,#120a1d 100%)!important}
+.reference-portrait{border-color:#ffffffcc;box-shadow:0 8px 25px #0008}
 .reference-portrait em{background:var(--gold);color:#3a2600}
 #preview-empty{color:#fff}
 #preview-empty p{color:#d3b9ea}
 #preview-empty>span{color:#a58fc4}
 .preview-label{background:#1a0f2ad9;color:#e8d9fb}
-.stage-corner{color:#ff8cc34d}
-.ai-label{background:#ff2d87dd;color:#fff}
+.stage-corner{color:#f0a0bf4d}
+.ai-label{background:#e0457bdd;color:#fff}
 #privacy-slate{background:#140c22;color:#fff}
 #privacy-slate svg{color:var(--pink)}
 #privacy-slate p{color:var(--sub)}
@@ -64,37 +64,37 @@ select{background:var(--surface-2);border-color:var(--line);color:var(--ink)}
 .character-option{background:#1d1530;border-color:var(--line)}
 .character-option img{background:#2a1f42}
 .character-option strong{color:#fff}
-.character-option small{color:#ff9fd0}
-.character-option.selected{border-color:#ff2d87;background:#2a1838;box-shadow:0 0 0 1px #ff2d87,0 0 22px #ff2d8755}
+.character-option small{color:#f3a3c0}
+.character-option.selected{border-color:#e0457b;background:#26162f;box-shadow:0 0 0 1px #e0457b}
 .character-option .selection-check{background:var(--grad);border-color:#fff}
 .add-character{background:#160f24;border-color:#4a3570}
 .add-character svg,.import-plus{color:var(--pink)}
-.add-character strong{color:#ff9fd0}
+.add-character strong{color:#f3a3c0}
 .add-character small,.library-note{color:#8676a6}
-.selected-character img{background:#2a1f42;box-shadow:0 0 0 2px #ff2d87}
+.selected-character img{background:#2a1f42;box-shadow:0 0 0 2px #e0457b}
 .selected-character strong{color:#fff}
 .selected-character p{color:var(--sub)}
 .selected-character .danger{color:#ff7a7a}
-.session-card #cloud-status{color:#ff9fd0}
+.session-card #cloud-status{color:#f3a3c0}
 .session-limit{color:var(--gold)}
-.text-button{color:#ff8cc3}
+.text-button{color:#f0a0bf}
 .text-button:hover{color:#fff}
 .footnote,.audio-card>label,.native-output-controls label,.audio-path,.meter-caption,.camera-output p,.beauty-controls label,.future-effects{color:var(--sub)}
 .camera-output strong{color:#fff}
 .audio-path i{color:#4b3a6b}
 .sound-visual{background:#120c1e}
 .sound-visual i{background:#3a2a55}
-.sound-visual.on i{background:var(--grad);box-shadow:0 0 6px #ff2d87}
+.sound-visual.on i{background:var(--pink)}
 .device-details{border-top-color:var(--line)}
 .device-details summary{color:var(--sub)}
 .device-details .status-dot{background:#4b3a6b;box-shadow:none}
-.device-details .status-dot.on{background:var(--pink);box-shadow:0 0 6px var(--pink)}
+.device-details .status-dot.on{background:var(--pink);box-shadow:none}
 .beauty-controls output{color:var(--gold)}
 .beauty-controls input{accent-color:var(--pink)}
-#beauty-toggle[aria-pressed=true]{background:#2a1838;border-color:#ff2d87}
+#beauty-toggle[aria-pressed=true]{background:#2a1838;border-color:#e0457b}
 footer{color:#7f7299}
 #message{background:#2b1a0c;border-color:#6b4a1a;color:var(--gold)}
-dialog{background:#1a1229;border-color:var(--line);color:var(--ink);box-shadow:0 22px 80px #000a,0 0 40px #9b3dff33}
+dialog{background:#1a1229;border-color:var(--line);color:var(--ink);box-shadow:0 22px 80px #000a}
 dialog::backdrop{background:#07040cb0}
 dialog h2{color:#fff}
 .subtitle,dialog li p{color:var(--sub)}
@@ -102,6 +102,6 @@ dialog h2{color:#fff}
 dialog li::marker{color:var(--pink)}
 .notice{background:#241a38;color:#d3b9ea}
 .character-grid .empty-library{color:var(--sub)}
-.clip-preview{background:#120a1d;box-shadow:0 0 0 1px #ff2d8755}
+.clip-preview{background:#120a1d}
 .login-form input{background:var(--surface-2);border-color:var(--line);color:var(--ink)}
 .login-form label{color:var(--sub)}

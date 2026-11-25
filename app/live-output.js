@@ -30,11 +30,11 @@ class LiveCompositor {
       const scale = Math.min(LIVE_WIDTH / width, LIVE_HEIGHT / height), w = width * scale, h = height * scale;
       ctx.drawImage(element, (LIVE_WIDTH - w) / 2, (LIVE_HEIGHT - h) / 2, w, h);
       // Burned into pixels so every downstream app keeps the synthesis label.
-      ctx.fillStyle = 'rgba(255, 45, 135, 0.85)'; ctx.fillRect(LIVE_WIDTH - 318, 24, 294, 44);
+      ctx.fillStyle = 'rgba(160, 40, 90, 0.85)'; ctx.fillRect(LIVE_WIDTH - 318, 24, 294, 44);
       ctx.fillStyle = '#ffffff'; ctx.font = '20px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
       ctx.fillText(shown === 'test' ? 'LOCAL TEST · SoundFace' : 'AI GENERATED · SoundFace', LIVE_WIDTH - 304, 53);
     } else {
-      ctx.fillStyle = '#ff2d87'; ctx.fillRect(LIVE_WIDTH / 2 - 36, LIVE_HEIGHT / 2 - 92, 72, 6);
+      ctx.fillStyle = '#e0457b'; ctx.fillRect(LIVE_WIDTH / 2 - 36, LIVE_HEIGHT / 2 - 92, 72, 6);
       ctx.fillStyle = '#ffffff'; ctx.font = '600 44px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
       ctx.fillText('稍后回来', LIVE_WIDTH / 2, LIVE_HEIGHT / 2);
       ctx.fillStyle = '#c9b3e6'; ctx.font = '24px sans-serif';
