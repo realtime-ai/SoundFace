@@ -82,7 +82,8 @@ async function refresh() {
   const previousVideo = $('video-input').value; $('video-input').replaceChildren();
   const generated = document.createElement('option'); generated.value = 'vidu'; generated.textContent = '数字人画面'; $('video-input').append(generated);
   const testPattern = document.createElement('option'); testPattern.value = 'test-pattern'; testPattern.textContent = '测试画面（免费）'; $('video-input').append(testPattern);
-  for (const camera of status.camera.inputs) {
+  // Raw camera output is a support-only option: hidden unless enabled in 给客服看的信息.
+  for (const camera of $('show-raw-camera').checked ? status.camera.inputs : []) {
     const option = document.createElement('option'); option.value = camera.uid; option.textContent = camera.name + ' · 你的真实画面（会露脸）'; $('video-input').append(option);
   }
   if ([...$('video-input').options].some(option => option.value === previousVideo)) $('video-input').value = previousVideo;
@@ -123,6 +124,7 @@ $('audio-toggle').onclick = () => run(async () => {
 $('audio-input').onchange = draw;
 $('video-input').onchange = draw;
 $('video-toggle').onclick = () => run(async () => { if (video.running) await api.stopVideo(); else if ($('video-input').value === 'vidu') await startGeneratedOutput(); else video = await api.startVideo($('video-input').value); });
+$('show-raw-camera').onchange = () => run(async () => { if (!$('show-raw-camera').checked && video.running && !['vidu', 'vidu-probe', 'test-pattern'].includes(video.inputUID)) await api.stopVideo(); await refresh(); });
 $('video-probe').onclick = () => run(async () => { if (video.running) await api.stopVideo(); else video = await api.startVideo('vidu-probe'); });
 $('camera-activate').onclick = () => run(async () => { cameraInstall = await api.activateCamera(); });
 $('camera-refresh').onclick = () => run(refresh);

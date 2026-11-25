@@ -151,11 +151,11 @@ async function endCloud(reason = 'user_stop') {
 }
 const ownError = text => Object.assign(new Error(text), { soundface: true });
 async function beginCloud({ output = false } = {}) {
-  if (!cloudState.configured) throw new Error('服务暂时用不了，请更新到最新版，或联系客服。');
+  if (!cloudState.configured) throw ownError('服务暂时用不了，请更新到最新版，或联系客服。');
   const generation = ++cloudGeneration;
   connectionEvents = []; void api.cloudDiagnostic({ stage: 'attempt-start', code: rtcTransport });
   if (output) outputIntent.request(); else outputIntent.cancel();
-  const check = () => { if (generation !== cloudGeneration || audio.privacy) throw new Error('已取消'); };
+  const check = () => { if (generation !== cloudGeneration || audio.privacy) throw ownError('已取消'); };
   cloudState = { phase: 'creating', billing: 'none', configured: true, error: '', frames: 0 }; draw();
   try {
     if (!stream) await startCamera();
@@ -175,7 +175,7 @@ async function beginCloud({ output = false } = {}) {
     await engine.setLocalViewConfig($('camera-preview'), 1); check();
     await engine.startPreview(); check();
     $('camera-preview').hidden = false;
-    const { transport } = await api.startCloud(character); check();
+    const { transport } = await api.startCloud(character).catch(error => { throw ownError(/vidu|上游/i.test(error.message) ? '数字人服务暂时用不了，请过一会儿再试。（错误代码：上游）' : error.message); }); check();
     // Provider-neutral seam: the server names the real-time channel to join.
     if (transport.type !== 'alirtc') throw ownError(`当前版本不支持，请更新到最新版。（错误代码：${String(transport.type).replace(/[^a-z0-9-]/gi, '').slice(0, 20)}）`);
     frameCount = 0; lastFrameAt = 0; awaitingFrameAt = Date.now();
@@ -227,10 +227,10 @@ async function beginCloud({ output = false } = {}) {
   } catch (error) {
     void api.cloudDiagnostic({ stage: 'start-error', code: error.code || error.name || 'unknown' });
     if (generation === cloudGeneration) {
-      // Our own messages (main process via IPC, the check() cancel, ownError) are shown as-is;
+      // Only errors tagged by ownError (incl. main-process IPC errors from startCloud) are shown as-is;
       // raw RTC SDK errors become one plain sentence with the SDK code for support.
-      const own = error.soundface || error.message?.startsWith('Vidu') || /登录|剩余时长|还没完全停止|服务|已取消|错误代码|摄像头|角色|图片|隐私暂停/.test(error.message || '');
-      message(own ? error.message : `数字人连接失败，请检查网络和摄像头权限。（错误代码：${[error.code, error.name].filter(Boolean).join(' · ') || 'unknown'}）`);
+      const own = error.soundface === true;
+      message(own ? error.message : `数字人连接失败，请检查网络和摄像头权限。（错误代码：${[error.code, error.name].filter(Boolean).join(' · ') || '未知'}）`);
       await endCloud();
     }
   }
