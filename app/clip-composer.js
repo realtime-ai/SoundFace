@@ -32,7 +32,7 @@ function compareAt(elapsed, duration = CLIP_COMPARE_MS) {
 // user. A replacement image can be passed as `beforeImage`.
 function drawGenericSilhouette(ctx, width, height) {
   const gradient = ctx.createLinearGradient(0, 0, 0, height);
-  gradient.addColorStop(0, '#3a1450'); gradient.addColorStop(1, '#120a1d');
+  gradient.addColorStop(0, '#1a2a5e'); gradient.addColorStop(1, '#080c18');
   ctx.fillStyle = gradient; ctx.fillRect(0, 0, width, height);
   ctx.fillStyle = '#05080a';
   ctx.beginPath(); ctx.ellipse(width / 2, height * 0.38, width * 0.17, height * 0.12, 0, 0, Math.PI * 2); ctx.fill();
@@ -53,7 +53,7 @@ class ClipComposer {
     if (this.transitionStart != null && this.style === 'compare') return this.renderCompare(source, element, beforeImage);
     const ctx = this.context;
     ctx.save();
-    ctx.fillStyle = '#120a1d'; ctx.fillRect(0, 0, CLIP_WIDTH, CLIP_HEIGHT);
+    ctx.fillStyle = '#080c18'; ctx.fillRect(0, 0, CLIP_WIDTH, CLIP_HEIGHT);
     const phase = this.transitionStart == null ? transitionAt(Infinity) : transitionAt(this.now() - this.transitionStart);
     if (phase.done) this.transitionStart = null;
     const live = (source === 'cloud' || source === 'test') && element;
@@ -91,10 +91,10 @@ class ClipComposer {
     } else drawGenericSilhouette(ctx, CLIP_WIDTH, CLIP_HEIGHT);
     if (split > 0) {
       ctx.save(); ctx.beginPath(); ctx.rect(0, 0, split, CLIP_HEIGHT); ctx.clip();
-      ctx.fillStyle = '#120a1d'; ctx.fillRect(0, 0, CLIP_WIDTH, CLIP_HEIGHT);
+      ctx.fillStyle = '#080c18'; ctx.fillRect(0, 0, CLIP_WIDTH, CLIP_HEIGHT);
       if (crop) ctx.drawImage(element, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, CLIP_WIDTH, CLIP_HEIGHT);
       ctx.restore();
-      ctx.fillStyle = '#e0457b'; ctx.fillRect(split - 3, 0, 6, CLIP_HEIGHT);
+      ctx.fillStyle = '#4c6fff'; ctx.fillRect(split - 3, 0, 6, CLIP_HEIGHT);
     }
     ctx.font = '600 36px sans-serif'; ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
     if (split < CLIP_WIDTH - 140) { ctx.textAlign = 'right'; ctx.fillText('BEFORE', CLIP_WIDTH - 32, 140); }
@@ -107,7 +107,7 @@ class ClipComposer {
   drawMarks(source) {
     const ctx = this.context;
     // AI label (always) and brand corner, burned into every exported frame.
-    ctx.fillStyle = 'rgba(160, 40, 90, 0.85)'; ctx.fillRect(CLIP_WIDTH - 300, 32, 276, 44);
+    ctx.fillStyle = 'rgba(43, 63, 181, 0.85)'; ctx.fillRect(CLIP_WIDTH - 300, 32, 276, 44);
     ctx.fillStyle = '#ffffff'; ctx.font = '20px sans-serif';
     ctx.fillText(source === 'test' ? 'LOCAL TEST · SoundFace' : 'AI GENERATED · SoundFace', CLIP_WIDTH - 286, 61);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.88)'; ctx.font = '600 30px sans-serif';

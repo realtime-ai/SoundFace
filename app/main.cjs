@@ -202,7 +202,7 @@ app.whenReady().then(async () => {
     return shell.openExternal('x-apple.systempreferences:com.apple.preference.security?' + panel);
   });
   handle('open-guide', () => shell.openPath(app.isPackaged ? path.join(resources, 'DEVELOPMENT.md') : path.join(root, 'docs/DEVELOPMENT.md')));
-  window = new BrowserWindow({ width: 1240, height: 900, minWidth: 960, minHeight: 720, title: 'SoundFace', icon: path.join(root, 'assets/icons/soundface.png'), backgroundColor: '#f2f5f3', titleBarStyle: 'hiddenInset', webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false } });
+  window = new BrowserWindow({ width: 1240, height: 900, minWidth: 960, minHeight: 720, title: 'SoundFace', icon: path.join(root, 'assets/icons/soundface.png'), backgroundColor: '#080c18', titleBarStyle: 'hiddenInset', webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false } });
   if (!app.isPackaged && process.platform === 'darwin') app.dock.setIcon(path.join(root, 'assets/icons/soundface.png'));
   // Only the live output popup may open: a blank same-origin window that the
   // renderer draws into. Every other window.open is denied.
