@@ -1,0 +1,7 @@
+# Copy to .dev.vars for local development. Never commit .dev.vars.
+DEV_LOGIN=1
+PROVIDER=fake
+TRIAL_SECONDS=600
+# For a paid Vidu test both are required (and cost money):
+# ALLOW_PAID=1
+# VIDU_API_KEY=vda_...

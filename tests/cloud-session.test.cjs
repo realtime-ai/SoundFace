@@ -2,11 +2,33 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { CloudSession } = require('../app/cloud-session.cjs');
 const { ProxyBackend } = require('../app/cloud-backend.cjs');
-const { JsonStore } = require('../server/store.cjs');
-const { SessionService } = require('../server/service.cjs');
-const { createServer } = require('../server/http.cjs');
-const { DevAuthenticator } = require('../server/auth.cjs');
-const { FakeProvider } = require('../server/providers/fake.cjs');
+const http = require('node:http');
+
+// Minimal stand-in for the Workers API contract (workers/src/index.js), so the
+// client can be tested without workerd. The real server is tested in workers/test.
+async function contractServer(t, { now }) {
+  const state = { balance: 600, token: 'tok-' + Math.random(), session: null, frames: 0, firstFrameAt: null, code: null };
+  const server = http.createServer(async (request, response) => {
+    let body = ''; for await (const chunk of request) body += chunk; body = body ? JSON.parse(body) : {};
+    const send = (status, data) => { response.writeHead(status, { 'Content-Type': 'application/json' }); response.end(JSON.stringify(data)); };
+    const account = () => ({ id: 'x', name: state.name, remainingSeconds: state.balance, remainingMinutes: Math.floor(state.balance / 60) });
+    const authed = request.headers.authorization === 'Bearer ' + state.token;
+    const url = request.url;
+    if (url === '/v1/auth/dev/login') { state.name = body.name; return send(200, { token: state.token, account: account() }); }
+    if (url === '/v1/auth/sms/code') return /^1\d{10}$/.test(body.phone || '') ? send(200, { resendAfterSeconds: 60 }) : send(400, { code: 'BAD_PHONE', message: '请输入 11 位手机号' });
+    if (url === '/v1/auth/sms/login') { if (body.code !== '000000') return send(400, { code: 'CODE_WRONG', message: '验证码不正确' }); state.name = '138****8000'; return send(200, { token: state.token, account: account() }); }
+    if (!authed) return send(401, { code: 'UNAUTHENTICATED', message: '请先登录' });
+    if (url === '/v1/me') return send(200, account());
+    if (url === '/v1/redeem') { if (body.code !== 'SF-GOOD') return send(400, { code: 'REDEEM_INVALID', message: '兑换码无效、已被使用或已过期' }); state.balance += 99 * 60; return send(200, { credits: 99, account: account() }); }
+    if (url === '/v1/history') return send(200, { purchases: [], sessions: [] });
+    if (url === '/v1/sessions') { state.session = 'sess-1'; return send(200, { sessionId: 'sess-1', provider: 'fake', transport: { type: 'fake' }, control: { type: 'none' } }); }
+    if (url === '/v1/sessions/sess-1/heartbeat') { if (body.frames > 0 && !state.firstFrameAt) state.firstFrameAt = now(); return send(200, { state: 'active', remainingSeconds: state.balance }); }
+    if (url === '/v1/sessions/sess-1/hangup') { const billed = state.firstFrameAt ? Math.floor((now() - state.firstFrameAt) / 1000) : 0; state.balance -= billed; return send(200, { state: 'ended', billedSeconds: billed }); }
+    send(404, { code: 'NOT_FOUND' });
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); t.after(() => server.close());
+  return { url: `http://127.0.0.1:${server.address().port}`, state };
+}
 
 // Scripted backend for lifecycle edge cases.
 function fixture({ holdCreate = false, holdInit = false, ended = true, rejectCreate = false, control = 'vidu-ws', image = () => 'data:image/jpeg;base64,reference', characterExists } = {}) {
@@ -86,21 +108,24 @@ test('lost UI heartbeat still stops the session', async t => {
   assert.equal(f.session.snapshot().billing, 'ended'); assert.match(f.session.snapshot().error, /失去响应/);
 });
 
-test('end to end against the local server with the fake provider: login, start, stop, quota deducted', async t => {
+test('end to end against the API contract: login, start, first frame reported, stop, billed from the first frame', async t => {
   let time = 5_000_000; const now = () => time;
-  const service = new SessionService({ store: new JsonStore(null), provider: new FakeProvider({ now }), authenticators: [new DevAuthenticator()], now, pollDelay: 0, pollAttempts: 2 });
-  const server = createServer(service); await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); t.after(() => server.close());
-  const backend = new ProxyBackend({ baseUrl: `http://127.0.0.1:${server.address().port}` });
+  const server = await contractServer(t, { now });
+  const backend = new ProxyBackend({ baseUrl: server.url, heartbeatEveryMs: 0 });
   const session = new CloudSession({ backend, image: () => 'data:image/jpeg;base64,AAAA', Socket: class { constructor() { throw new Error('no socket expected'); } } });
   assert.equal(session.snapshot().configured, false);
   await backend.login('dev', { name: 'e2e-user' });
   assert.deepEqual(session.snapshot().account, { name: 'e2e-user', remainingSeconds: 600 });
   const { transport } = await session.start('qinghe');
   assert.equal(transport.type, 'fake');
-  time += 7_200;
+  time += 3_000; await backend.heartbeat('sess-1', 0);          // connecting: not billed
+  time += 1_000; await backend.heartbeat('sess-1', 5);          // first frame
+  time += 7_000;
   await session.stop();
-  assert.equal(session.snapshot().billing, 'ended'); assert.equal(session.snapshot().billedSeconds, 8);
-  await backend.refreshAccount(); assert.equal(backend.account.remainingSeconds, 592);
+  assert.equal(session.snapshot().billing, 'ended'); assert.equal(session.snapshot().billedSeconds, 7);
+  await backend.refreshAccount(); assert.equal(backend.account.remainingSeconds, 593);
+  await assert.rejects(backend.redeem('SF-BAD'), /兑换码无效/);
+  const redeemed = await backend.redeem('SF-GOOD'); assert.equal(redeemed.credits, 99); assert.equal(backend.account.remainingSeconds, 593 + 99 * 60);
 });
 
 test('the server session is kept alive during a slow provider initialization', async t => {
@@ -122,10 +147,8 @@ test('a server-side end (quota reached) stops the client with a clear reason', a
 });
 
 test('proxy backend shows our server\'s login messages and keeps the token out of the account object', async t => {
-  const { SmsAuthenticator, DevSmsSender } = require('../server/auth.cjs');
-  const service = new SessionService({ store: new JsonStore(null), provider: new FakeProvider(), authenticators: [new SmsAuthenticator({ sender: new DevSmsSender() })], pollDelay: 0 });
-  const server = createServer(service); await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); t.after(() => server.close());
-  const backend = new ProxyBackend({ baseUrl: `http://127.0.0.1:${server.address().port}` });
+  const server = await contractServer(t, { now: Date.now });
+  const backend = new ProxyBackend({ baseUrl: server.url });
   await assert.rejects(backend.requestCode('sms', { phone: '12' }), /11 位手机号/);
   await backend.requestCode('sms', { phone: '13800138000' });
   await assert.rejects(backend.login('sms', { phone: '13800138000', code: '123456' }), /验证码不正确/);

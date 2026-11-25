@@ -90,7 +90,7 @@ class CloudSession extends EventEmitter {
   }
   keepServerAlive() {
     const id = this.live?.id; if (!id) return;
-    Promise.resolve(this.backend.heartbeat(id)).then(view => {
+    Promise.resolve(this.backend.heartbeat(id, this.state.frames || 0)).then(view => {
       if (!view || view.state === 'active' || this.live?.id !== id || this.stopping) return;
       const reasons = { quota_reached: '时长已用完，会话已结束。', client_lost: '与 SoundFace 服务的连接中断，会话已结束。' };
       void this.stop(reasons[view.endReason] || '服务端已结束会话。');
@@ -98,13 +98,12 @@ class CloudSession extends EventEmitter {
   }
   heartbeat(metrics = {}) {
     this.heartbeatAt = Date.now();
-    if (this.live && this.state.billing === 'active') this.keepServerAlive();
-    if (!['waiting_frames', 'live'].includes(this.state.phase)) return this.snapshot();
     const frames = Number(metrics.frames);
-    if (Number.isSafeInteger(frames) && frames > this.state.frames) {
+    if (['waiting_frames', 'live'].includes(this.state.phase) && Number.isSafeInteger(frames) && frames > this.state.frames) {
       const firstFrameMs = this.state.firstFrameMs ?? Date.now() - this.state.startedAt;
       this.publish({ phase: 'live', frames, width: Math.min(8192, Number(metrics.width) || 0), height: Math.min(8192, Number(metrics.height) || 0), firstFrameMs });
     }
+    if (this.live && this.state.billing === 'active') this.keepServerAlive();
     return this.snapshot();
   }
   async endRemote() {

@@ -115,21 +115,21 @@ SDK 固定版本随应用打包，出处和 SHA-256 在 `app/vendor/NOTICE.txt`�
 - https://help.aliyun.com/zh/live/set-local-audio-and-video-properties
 - https://developer.apple.com/documentation/coremediaio/creating-a-camera-extension-with-core-media-i-o
 
-## 服务端代理：账号、额度与会话
+## 服务端（Cloudflare Workers）：账号、credit、兑换码与会话
 
-`server/` 是 SoundFace 服务端（只用 Node 内置模块，无运行时依赖），不打进桌面安装包。
+`workers/` 是 SoundFace 服务端，运行在 Cloudflare Workers 上（取代原来的本地 Node 服务端 `server/`），不打进桌面安装包。**尚未部署**：部署需要负责人提供 Cloudflare 账号（或带 Workers / D1 / Durable Objects 权限的 API 令牌）、开通 Workers 付费版（发邮件需要）和一个托管在 Cloudflare 的域名；Vidu Key 由负责人用 `wrangler secret put VIDU_API_KEY` 自行设置。
 
-- 启动（开发）：`npm run server`，即 `SOUNDFACE_DEV_LOGIN=1 node server/index.cjs`，监听 `127.0.0.1:8787`，数据存在 `.soundface-local/server.json`（JSON 文件，上线前要换数据库）。
-- 桌面端开发版：`SOUNDFACE_DEV_USER=<名字> npm start` 自动用开发登录连本地服务；`SOUNDFACE_SERVER_URL` 可改地址（非本机必须 https）。打包版忽略这两个环境变量，开发登录在打包版不可用。
-- 上游默认是模拟服务商 `fake`：不联网、不花钱，按创建到挂断的整秒数计费。真实服务商需要同时设置 `SOUNDFACE_PROVIDER=vidu`、`SOUNDFACE_ALLOW_PAID=1` 和 `VIDU_API_KEY`，缺一不可；Key 只在服务端。
-- 额度：新账号默认 600 秒（`SOUNDFACE_DEFAULT_QUOTA`）。剩余不足 60 秒拒绝开新会话；每个账号同时只能有一场会话，上一场未确认结束时拒绝新会话。
-- 结算：挂断后轮询上游，确认 `ended` 才按上游计费秒数扣额度，且只扣一次；上游没给计费秒数时按实际时长向上取整。未确认的记为 `unknown`，阻止新会话，由回收任务重试。
-- 回收任务（每 10 秒）：客户端 30 秒无心跳（`client_lost`）、或本场时长达到剩余额度（`quota_reached`）时，服务端主动挂断；同时重试 `unknown`；创建超过 120 秒仍停在 `creating` 的记录（服务端在创建途中崩溃）标记为失败，避免账号被卡住。客户端从会话创建起每 5 秒向服务端保活（包括等待上游初始化期间），从心跳返回得知会话被服务端结束时，提示“时长已用完”等原因并停止。
-- 风险：Vidu 的服务端挂断靠用同一 `conn_id` 重连控制通道再发挂断信号，依赖平台未公开的重连宽限期；超过宽限期可能挂不掉，需要向平台确认是否有 REST 结束接口。
-- 服务商抽象：服务商实现 `create / hangup / status`（`server/providers/`）。`create` 返回与服务商无关的 `{ transport, control }`：`transport.type` 告诉客户端加入哪种实时通道（目前 `alirtc`；接 Xmax 时增加声网/腾讯/火山类型并在 `app/cloud-renderer.js` 增加对应接入），`control.type` 为 `vidu-ws` 或 `none`。客户端遇到不支持的通道类型会提示并结束会话。
-- 登录：`server/auth.cjs` 中可替换的登录方式。桌面端是“手机号 + 短信验证码”登录框（数字人卡片里的“登录”）。短信服务商未定：`SmsAuthenticator` 的发送器可替换，目前只有开发用的 `DevSmsSender`（不发短信，验证码固定 000000，界面会提示）；验证码 5 分钟有效、60 秒内不能重发、最多试 5 次、一次性。开发服务端还有按名字登录（`POST /v1/auth/dev/login`，桌面端用 `SOUNDFACE_DEV_USER`）。两种开发登录都只在服务端设置 `SOUNDFACE_DEV_LOGIN=1` 时注册。登录凭证由主进程用系统钥匙串（Electron safeStorage）加密保存在 userData，不传给界面；重启后自动恢复，失效时自动退出。
-- 接口：`POST /v1/auth/:method/code`、`POST /v1/auth/:method/login`、`GET /v1/me`、`POST /v1/sessions`、`POST /v1/sessions/:id/heartbeat`、`POST /v1/sessions/:id/hangup`、`GET /v1/sessions/:id`。
-- 尚未做：接入真实短信服务商、支付和充值、部署与监控、数据库、跨重启的会话恢复（服务端回收任务已覆盖客户端异常退出）。
+- 本地开发：`cd workers && npm install && cp .dev.vars.example .dev.vars && npm run db:migrate:local && npm run dev`，监听 `127.0.0.1:8787`（桌面端开发版默认连这个地址）。根目录 `npm run server` 等价。自动测试：`cd workers && npm test`（起一个真实的本地 workerd，含 D1、Durable Objects 和模拟发信）。
+- 存储：D1 存全局索引——账号列表、登录凭证（只存 SHA-256）、登录验证码、兑换码（只存 SHA-256 和尾号）。每个账号一个 Durable Object（`AccountObject`，自带 SQLite），串行处理该账号的余额、充值流水、会话和结算，避免并发重复扣费。
+- 登录：邮箱 + 验证码、手机号 + 验证码（`src/auth.js`）。正式发信用 Cloudflare Email Service（`send_email` 绑定，需在 Cloudflare 接入发信域名，并设置 `MAIL_FROM`）；`wrangler dev` 下发信只是模拟。短信服务商未定，正式版暂无手机号登录。`DEV_LOGIN=1` 时启用开发登录：按名字登录，以及验证码固定 000000、不真实发送的邮箱/手机号登录；线上绝不能打开。验证码 5 分钟有效、60 秒内不能重发、最多试 5 次、一次性。手机号和邮箱是两个账号。
+- credit：1 credit = 1 分钟。后台按秒记，不足 1 分钟的部分留在账户里，不向上取整；界面显示“剩余 xx 分钟”。新用户试用秒数由 `TRIAL_SECONDS` 决定（线上默认 0，待负责人定）。套餐表在 `src/plans.js`，只用于展示和生成兑换码面额。
+- 计费规则：从客户端报告的第一帧生成画面开始，到发出挂断为止；不超过服务商实际向我们收的秒数；没出过画面的会话不扣。客户端失联时只算到最后一次心跳。余额不足 1 分钟拒绝开新会话；会话中余额用完，服务端主动挂断（`quota_reached`）。
+- 回收：每个有未结束会话的账号对象每 5 秒被闹钟唤醒一次：30 秒无心跳（`HEARTBEAT_TIMEOUT_MS`）挂断（`client_lost`），余额用完挂断，重试未确认结束的会话，清理创建超时的记录。
+- 兑换码：`SF-XXXX-XXXX-XXXX-XXXX`，16 位 Crockford base32（80 位随机）。一次性；同一账号连续输错 5 次锁定 15 分钟。负责人用命令行生成和查询：`npm run codes -- create --plan starter --count 20 [--expires-days 90] --remote`、`npm run codes -- list [--batch …] --remote`、`npm run codes -- show SF-… --remote`。码只在创建时显示一次。
+- 服务商：`src/providers.js`，默认模拟服务商 `fake`（不联网、不花钱）。真实 Vidu 需同时设置 `PROVIDER=vidu`、`ALLOW_PAID=1` 和 `VIDU_API_KEY`。服务端挂断 Vidu 改用 Workers 的对外 WebSocket，**尚未对真实上游验证**。`create` 返回与服务商无关的 `{ transport, control }`，接 Xmax 只需新增一个实现。
+- 接口：`POST /v1/auth/:method/code`、`POST /v1/auth/:method/login`、`GET /v1/me`、`GET /v1/plans`、`POST /v1/redeem`、`GET /v1/history`、`POST /v1/sessions`、`POST /v1/sessions/:id/heartbeat`（带 `frames`）、`POST /v1/sessions/:id/hangup`、`GET /v1/sessions/:id`。
+- 桌面端开发版：`SOUNDFACE_DEV_USER=<名字> npm start` 自动用开发登录；`SOUNDFACE_SERVER_URL` 可改地址（非本机必须 https）。打包版忽略这两个环境变量。
+- 风险：Cloudflare 在中国大陆没有备案无法使用境内节点，默认的 workers.dev 域名在大陆经常无法访问；海外发出的验证码邮件进 QQ / 163 邮箱可能进垃圾箱或延迟，域名到位后要实测。
 
 ## 直播画面窗口（OBS 窗口采集）
 

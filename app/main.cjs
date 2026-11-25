@@ -75,6 +75,9 @@ app.whenReady().then(async () => {
   const requireNoSession = () => { if (cloud.starting || cloud.stopping || cloud.live || cloud.state.billing === 'unknown') throw new Error('请先结束当前数字人会话。'); };
   handle('account-code', (method, id) => backend.requestCode(method, loginBody(method, id)));
   handle('account-login', async (method, id, code) => { requireNoSession(); const account = await backend.login(method, loginBody(method, id, code)); saveToken(backend.token); publishAccount(); return account.name; });
+  handle('account-redeem', async code => { if (typeof code !== 'string' || code.length > 64) throw new Error('兑换码无效'); const result = await backend.redeem(code); publishAccount(); return { credits: result.credits }; });
+  handle('account-history', () => backend.history());
+  handle('account-plans', () => backend.plans());
   handle('account-logout', () => { requireNoSession(); backend.logout(); saveToken(''); publishAccount(); return true; });
   const connectionTrace = new ConnectionTrace();
   const rtcTransport = process.env.SOUNDFACE_RTC_TRANSPORT === 'tcp' ? 'tcp' : 'auto';

@@ -1,0 +1,15 @@
+{
+  "name": "soundface-api",
+  "private": true,
+  "type": "module",
+  "description": "SoundFace backend on Cloudflare Workers: login, credits, redeem codes, generation sessions.",
+  "scripts": {
+    "dev": "wrangler dev --port 8787",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "codes": "node scripts/codes.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.50.0"
+  }
+}

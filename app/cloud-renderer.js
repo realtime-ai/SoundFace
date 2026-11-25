@@ -84,7 +84,8 @@ function cloudDraw() {
   $('remove-character').hidden = selected.source !== 'custom'; $('remove-character').disabled = active || cloudState.billing === 'unknown';
   document.querySelector('[data-action="import"]').disabled = active || cloudState.billing === 'unknown';
   const account = cloudState.account;
-  $('session-limit').textContent = account ? `账号 ${account.name} · 剩余 ${Math.floor(account.remainingSeconds / 60)} 分 ${account.remainingSeconds % 60} 秒 · 按实际生成时长扣除` : '手动结束 · 按实际生成时长计费';
+  $('session-limit').textContent = account ? `${account.name} · 剩余 ${Math.floor(account.remainingSeconds / 60)} 分钟` : '登录后可查看剩余时长';
+  $('recharge-open').hidden = !account;
   $('cloud-status').textContent = !cloudState.configured ? '尚未登录 SoundFace 账号，暂不能开启数字人。' : (cloudState.phase === 'ended' && !cloudState.frames ? (cloudState.closeReason === 'live_ended' ? '生成连接中断 · 未收到画面' : '已停止 · 尚未收到生成画面') : cloudNames[cloudState.phase] || cloudState.phase) + (cloudState.billing === 'ended' ? ' · 云端结束已确认' : cloudState.billing === 'unknown' ? ' · 云端结束未确认' : '');
   if (cloudState.frames > 0 || cloudState.billing === 'ended') {
     const elapsed = cloudState.startedAt ? Math.max(0, (Date.now() - cloudState.startedAt) / 1000).toFixed(0) : 0;
@@ -223,6 +224,7 @@ async function beginCloud({ output = false } = {}) {
   }
 }
 $('cloud-toggle').onclick = async () => {
+  if (!cloudActive() && cloudState.billing !== 'unknown' && cloudState.account && cloudState.account.remainingSeconds < 60) { openRecharge('余额不足 1 分钟，充值后才能开启。'); return; }
   try { message(''); if (cloudActive() || cloudState.billing === 'unknown') await endCloud(); else await beginCloud({ output: wantsGeneratedOutput() }); }
   catch (error) { message(error.message); } finally { draw(); }
 };
