@@ -89,7 +89,7 @@ static AudioStreamBasicDescription format(double rate, UInt32 channels) {
 SFRoute *sf_route_start(AudioDeviceID inputID, AudioDeviceID outputID, char *error, size_t capacity) {
     SFRoute *route = calloc(1, sizeof(SFRoute));
     OSStatus result = noErr; const char *stage = "分配音频缓冲";
-    if (!route) { snprintf(error, capacity, "无法分配音频缓冲"); return NULL; }
+    if (!route) { snprintf(error, capacity, "虚拟麦克风开启失败，请换一个麦克风再试。（错误代码：无法分配音频缓冲）"); return NULL; }
     route->ring = sf_ring_create();
     if (!route->ring) { result = kAudio_MemFullError; goto fail; }
     AudioComponentDescription description = {.componentType = kAudioUnitType_Output,
@@ -108,7 +108,7 @@ SFRoute *sf_route_start(AudioDeviceID inputID, AudioDeviceID outputID, char *err
     CHECK("读取输入格式", AudioUnitGetProperty(route->input, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 1, &hardware, &size));
     double rate = hardware.mSampleRate;
     if ((rate != 8000 && rate != 16000 && rate != 24000 && rate != 32000 && rate != 44100 && rate != 48000) || hardware.mChannelsPerFrame < 1 || hardware.mChannelsPerFrame > 32) {
-        snprintf(error, capacity, "macOS 当前提供的输入格式为 %.0f Hz / %u 声道。本版支持 8 / 16 / 24 / 32 / 44.1 / 48 kHz 输入，请选择其他输入设备。", rate, hardware.mChannelsPerFrame);
+        snprintf(error, capacity, "虚拟麦克风开启失败，请换一个麦克风再试。（错误代码：macOS 当前提供的输入格式为 %.0f Hz / %u 声道。本版支持 8 / 16 / 24 / 32 / 44.1 / 48 kHz 输入）", rate, hardware.mChannelsPerFrame);
         sf_route_stop(route); return NULL;
     }
     route->inputRate = rate;
@@ -153,7 +153,7 @@ SFRoute *sf_route_start(AudioDeviceID inputID, AudioDeviceID outputID, char *err
     CHECK("启动输入", AudioOutputUnitStart(route->input));
     return route;
 fail:
-    snprintf(error, capacity, "%s失败 (OSStatus %d)", stage, (int)result);
+    snprintf(error, capacity, "虚拟麦克风开启失败，请换一个麦克风再试。（错误代码：%s失败 OSStatus %d）", stage, (int)result);
     sf_route_stop(route); return NULL;
 #undef CHECK
 }

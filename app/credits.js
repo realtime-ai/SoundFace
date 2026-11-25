@@ -5,7 +5,7 @@
 const minutesLeft = () => Math.floor((cloudState.account?.remainingSeconds || 0) / 60);
 let planCache = null;
 function openRecharge(note = '') {
-  $('recharge-balance').textContent = cloudState.account ? `当前剩余 ${minutesLeft()} 分钟。1 credit = 1 分钟数字人。` : '请先登录。';
+  $('recharge-balance').textContent = cloudState.account ? `还剩 ${minutesLeft()} 分钟。` : '请先登录。';
   $('redeem-code').value = ''; redeemHint(note, Boolean(note));
   if (!$('recharge-dialog').open) $('recharge-dialog').showModal();
   $('redeem-code').focus();
@@ -42,14 +42,14 @@ function drawPlans() {
       const { credits } = await api.redeemCode(code);
       redeemHint(`兑换成功，已到账 ${credits} 分钟。`, false, true);
       $('redeem-code').value = '';
-      setTimeout(() => { $('recharge-balance').textContent = `当前剩余 ${minutesLeft()} 分钟。1 credit = 1 分钟数字人。`; }, 300);
+      setTimeout(() => { $('recharge-balance').textContent = `还剩 ${minutesLeft()} 分钟。`; }, 300);
     } catch (error) { redeemHint(error.message, true); $('redeem-code').select(); }
     finally { $('redeem-submit').disabled = false; }
   };
-  // "使用与计费": purchase and usage history when logged in.
+  // "怎么用、怎么收费": purchase and usage history when logged in.
   const time = ms => new Date(ms).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   const duration = seconds => seconds >= 60 ? `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒` : `${seconds} 秒`;
-  const sources = { trial: '新用户试用', redeem: '兑换码' };
+  const sources = { trial: '新用户赠送', redeem: '兑换码充值' };
   function fill(id, rows, empty) {
     const body = $(id).querySelector('tbody'); body.replaceChildren();
     if (!rows.length) { const tr = document.createElement('tr'); const td = document.createElement('td'); td.colSpan = 3; td.className = 'empty'; td.textContent = empty; tr.append(td); body.append(tr); return; }
@@ -61,8 +61,8 @@ function drawPlans() {
     try {
       const history = await api.accountHistory();
       fill('purchase-history', history.purchases.map(item => [time(item.at), sources[item.source] || item.source, `+${item.credits}`]), '还没有充值记录');
-      fill('usage-history', history.sessions.map(item => [time(item.startedAt), item.seconds ? duration(item.seconds) : '未出画面', item.seconds ? `−${item.credits}` : '0']), '还没有使用记录');
-    } catch (error) { fill('usage-history', [], '记录加载失败：' + error.message); }
+      fill('usage-history', history.sessions.map(item => [time(item.startedAt), item.seconds ? duration(item.seconds) : '没出画面，未扣', item.seconds ? `−${item.credits} 分钟` : '0 分钟']), '还没有使用记录');
+    } catch (error) { fill('usage-history', [], '记录没有加载出来：' + error.message); }
   });
   // Low-balance reminders at 30 and 5 minutes (bar + one notice per threshold).
   let lastTier = null; // remind once per threshold crossed
@@ -70,8 +70,8 @@ function drawPlans() {
     const account = cloudState.account, left = account ? account.remainingSeconds : Infinity;
     const tier = left < 5 * 60 ? 5 : left < 30 * 60 ? 30 : null;
     $('balance-warning').hidden = tier == null;
-    if (tier != null) $('balance-warning-text').textContent = tier === 5 ? `余额不到 5 分钟（剩 ${Math.floor(left / 60)} 分钟），用完会自动停止数字人。` : `余额不到 30 分钟（剩 ${Math.floor(left / 60)} 分钟）。`;
-    if (tier != null && tier !== lastTier) message(tier === 5 ? '余额不到 5 分钟，用完会自动停止数字人。' : '余额不到 30 分钟，请留意充值。');
+    if (tier != null) $('balance-warning-text').textContent = tier === 5 ? `剩余时长不到 5 分钟（剩 ${Math.floor(left / 60)} 分钟），用完数字人会自动停止。` : `剩余时长不到 30 分钟（剩 ${Math.floor(left / 60)} 分钟），记得充值。`;
+    if (tier != null && tier !== lastTier) message(tier === 5 ? '剩余时长不到 5 分钟，用完数字人会自动停止。' : '剩余时长不到 30 分钟，记得充值。');
     lastTier = tier;
   }, 1000);
 })();

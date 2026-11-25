@@ -12,7 +12,7 @@ export class FakeProvider {
     sql.exec('CREATE TABLE IF NOT EXISTS fake_lives (live_id TEXT PRIMARY KEY, started_at INTEGER NOT NULL, ended_at INTEGER)');
   }
   async create({ image }) {
-    if (typeof image !== 'string' || !image.startsWith('data:image/')) throw Object.assign(new Error('参考图无效'), { code: 'BAD_IMAGE' });
+    if (typeof image !== 'string' || !image.startsWith('data:image/')) throw Object.assign(new Error('这张图片打不开，请换一张 JPG 或 PNG 图片。'), { code: 'BAD_IMAGE' });
     const liveId = 'fake-' + crypto.randomUUID();
     this.sql.exec('INSERT INTO fake_lives (live_id, started_at) VALUES (?, ?)', liveId, this.now());
     return { liveId, secret: null, connId: null, transport: { type: 'fake', room: liveId }, control: { type: 'none' } };

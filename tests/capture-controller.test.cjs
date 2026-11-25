@@ -9,7 +9,7 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 test('privacy cancels a delayed permission grant, even after leaving privacy mode', async () => {
   const grant = deferred(), bridge = fakeBridge();
   const controller = new CaptureController(bridge, () => grant.promise);
-  const start = controller.start('physical'); const rejected = assert.rejects(start, /采集请求已取消/);
+  const start = controller.start('physical'); const rejected = assert.rejects(start, /已取消/);
   await flush();
   const pause = controller.setPrivacy(true); await controller.setPrivacy(false);
   grant.resolve(true); await rejected; await pause;
@@ -21,7 +21,7 @@ test('privacy during native start always stops native capture before settling', 
   bridge.command = async action => { bridge.calls.push([action]); if (action === 'start') await started.promise; return { ok: true }; };
   const controller = new CaptureController(bridge, async () => true);
   const states = []; controller.on('state', state => states.push(state));
-  const start = controller.start('physical'); const rejected = assert.rejects(start, /采集请求已取消/);
+  const start = controller.start('physical'); const rejected = assert.rejects(start, /已进入隐私暂停/);
   await flush(); const pause = controller.setPrivacy(true); started.resolve();
   await rejected; await pause;
   assert.deepEqual(bridge.calls.map(([action]) => action), ['start', 'stop', 'stop']);
@@ -52,7 +52,7 @@ test('native failure and stale frame events never display a running route', asyn
 });
 test('permission denial never reaches the native start command', async () => {
   const bridge = fakeBridge(), controller = new CaptureController(bridge, async () => false);
-  await assert.rejects(controller.start('physical'), /采集权限未开启/);
+  await assert.rejects(controller.start('physical'), /没有摄像头权限/);
   assert.equal(bridge.calls.length, 0); assert.equal(controller.state.running, false);
 });
 test('audio levels reflect native samples and stale levels are discarded after stop', async () => {

@@ -61,10 +61,10 @@ final class Router {
     }
     func start(uid: String) throws {
         stop()
-        guard !uid.hasPrefix("SoundFace"), !uid.isEmpty else { throw RouteError.message("不能把虚拟麦克风选为自身输入。") }
+        guard !uid.hasPrefix("SoundFace"), !uid.isEmpty else { throw RouteError.message("这里要选真实的麦克风，不能选 SoundFace Microphone。") }
         let inputID = translate(uid), outputID = translate("SoundFace_2_UID")
-        guard inputID != 0 else { throw RouteError.message("输入设备已断开，请重新选择。") }
-        guard outputID != 0 else { throw RouteError.message("SoundFace 音频组件未加载，请安装组件并按提示重启。") }
+        guard inputID != 0 else { throw RouteError.message("麦克风断开了，请重新选择。") }
+        guard outputID != 0 else { throw RouteError.message("还没安装虚拟麦克风。请先安装，装完按提示重启电脑。") }
         var error = [CChar](repeating: 0, count: 512)
         guard let next = sf_route_start(inputID, outputID, &error, error.count) else { throw RouteError.message(String(cString: error)) }
         route = next
@@ -76,7 +76,7 @@ final class Router {
             if stats.outputFrames != self.lastOutput { self.lastOutputTime = now; self.lastOutput = stats.outputFrames }
             guard stats.error == 0, self.deviceReady(inputID, rate: stats.inputSampleRate), self.deviceReady(outputID, rate: stats.sampleRate),
                   now.timeIntervalSince(self.lastCaptureTime) < 2, now.timeIntervalSince(self.lastOutputTime) < 2 else {
-                self.stop(); emit(["event": "stopped", "reason": "音频设备或采样格式发生变化，已停止输出，请重新选择输入。"]); return
+                self.stop(); emit(["event": "stopped", "reason": "麦克风有变化，虚拟麦克风已关闭，请重新选择麦克风。"]); return
             }
             emit(["event": "levels", "inputPeak": stats.inputPeak, "outputPeak": stats.outputPeak, "capturedFrames": stats.capturedFrames, "outputFrames": stats.outputFrames, "sampleRate": stats.sampleRate, "inputSampleRate": stats.inputSampleRate])
         }

@@ -4,7 +4,7 @@ const { randomUUID } = require('node:crypto');
 const MAX_BYTES = 4 * 1024 * 1024;
 const customID = /^custom-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 function dimensions(data) {
-  if (data.length > MAX_BYTES) throw new Error('参考图不能超过 4 MB。');
+  if (data.length > MAX_BYTES) throw new Error('图片不能超过 4 MB，请换一张小一点的。');
   if (data.length >= 24 && data.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) && data.toString('ascii', 12, 16) === 'IHDR') return { width: data.readUInt32BE(16), height: data.readUInt32BE(20) };
   if (data[0] === 255 && data[1] === 216) {
     let offset = 2;
@@ -21,11 +21,11 @@ function dimensions(data) {
       offset += length;
     }
   }
-  throw new Error('请选择有效的 JPG 或 PNG 图片。');
+  throw new Error('这张图片打不开，请换一张 JPG 或 PNG 图片。');
 }
 function validateReference(data) {
   const { width, height } = dimensions(data);
-  if (Math.min(width, height) < 128 || Math.max(width, height) > 4096 || width * height > 16_000_000 || width / height < 0.25 || width / height > 4) throw new Error('图片边长需为 128–4096 像素，长宽比不超过 4:1。');
+  if (Math.min(width, height) < 128 || Math.max(width, height) > 4096 || width * height > 16_000_000 || width / height < 0.25 || width / height > 4) throw new Error('图片太小、太大或太窄了，请换一张正常比例的清晰照片。');
   return { width, height };
 }
 const builtinID = /^[a-z][a-z0-9-]{1,31}$/;
@@ -49,7 +49,7 @@ class CharacterLibrary {
   constructor({ directory, defaultImage, normalize, trash, builtins }) {
     Object.assign(this, { directory, defaultImage, normalize, trash });
     // Without a manifest, fall back to the single original default character.
-    this.builtins = new Map((builtins && builtins.length ? builtins : [{ id: 'qinghe', name: '青禾', file: defaultImage, thumbnail: '../assets/default-character.jpg', tag: '', description: '自然、清爽的出镜身份，保留你的动作与表情。' }]).map(item => [item.id, item]));
+    this.builtins = new Map((builtins && builtins.length ? builtins : [{ id: 'qinghe', name: '青禾', file: defaultImage, thumbnail: '../assets/default-character.jpg', tag: '', description: '自然清爽，保留你的动作与表情。' }]).map(item => [item.id, item]));
     fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
     this.records = new Map(); this.reload();
   }
@@ -65,7 +65,7 @@ class CharacterLibrary {
         const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
         if (typeof meta.name !== 'string' || !meta.name.trim() || meta.name.length > 40 || typeof meta.thumbnail !== 'string' || !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(meta.thumbnail)) continue;
         validateReference(fs.readFileSync(imagePath));
-        this.records.set(id, { id, name: meta.name, thumbnail: meta.thumbnail, source: 'custom', description: '使用你的参考图，跟随镜头中的动作与表情。' });
+        this.records.set(id, { id, name: meta.name, thumbnail: meta.thumbnail, source: 'custom', description: '你添加的角色，跟着你的动作和表情动。' });
       } catch { /* Ignore incomplete or invalid local records. */ }
     }
   }
@@ -79,9 +79,9 @@ class CharacterLibrary {
     return `data:image/${png ? 'png' : 'jpeg'};base64,` + data.toString('base64');
   }
   importFile(file) {
-    if (this.records.size >= 12) throw new Error('最多保存 12 个自定义角色，请先移除不需要的角色。');
+    if (this.records.size >= 12) throw new Error('最多添加 12 个角色，请先删掉不用的。');
     const stat = fs.statSync(file);
-    if (!stat.isFile() || stat.size > MAX_BYTES) throw new Error('请选择 4 MB 以内的 JPG 或 PNG 图片。');
+    if (!stat.isFile() || stat.size > MAX_BYTES) throw new Error('图片不能超过 4 MB，请换一张小一点的。');
     const data = fs.readFileSync(file), size = validateReference(data), normalized = this.normalize(data, size);
     validateReference(normalized.image);
     const id = 'custom-' + randomUUID(), name = path.basename(file, path.extname(file)).replace(/[\x00-\x1f\x7f]/g, '').trim().slice(0, 24) || '自定义角色';
@@ -93,7 +93,7 @@ class CharacterLibrary {
     this.reload(); return this.records.get(id);
   }
   async remove(id) {
-    if (!customID.test(id) || !this.records.has(id)) throw new Error('只能移除自己的参考图角色。');
+    if (!customID.test(id) || !this.records.has(id)) throw new Error('自带角色不能删除。');
     await this.trash(path.join(this.directory, id)); this.records.delete(id); return this.list();
   }
 }

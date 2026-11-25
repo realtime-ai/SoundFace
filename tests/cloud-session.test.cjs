@@ -82,7 +82,7 @@ test('cancel during creation hangs up the returned session without initializing'
 test('unconfirmed hangup cannot be reported as ended or allow a second session', async () => {
   const f = fixture({ ended: false }); await f.session.start('qinghe'); await f.session.stop();
   assert.equal(f.session.snapshot().billing, 'unknown');
-  await assert.rejects(f.session.start('qinghe'), /上一场/);
+  await assert.rejects(f.session.start('qinghe'), /还没完全停止/);
 });
 test('server refusals surface as visible errors without an active session', async () => {
   const f = fixture({ rejectCreate: true }); await assert.rejects(f.session.start('qinghe'), /剩余时长不足/);
@@ -92,7 +92,7 @@ test('unknown characters, unreadable references, logged-out clients and duplicat
   const f = fixture(); await assert.rejects(f.session.start('nova'), /不可用/);
   const g = fixture({ image: () => { throw new Error('missing local image'); } }); await assert.rejects(g.session.start('qinghe'), /missing local image/);
   const h = fixture(); h.backend.configured = false; await assert.rejects(h.session.start('qinghe'), /登录/);
-  await f.session.start('qinghe'); await assert.rejects(f.session.start('qinghe'), /上一场/); await f.session.stop();
+  await f.session.start('qinghe'); await assert.rejects(f.session.start('qinghe'), /还没完全停止/); await f.session.stop();
   assert.equal(f.calls.filter(call => call[0] === 'create').length + g.calls.length + h.calls.length, 1);
 });
 test('privacy during initialization cancels promptly and confirms server hangup', async () => {
@@ -105,7 +105,7 @@ test('lost UI heartbeat still stops the session', async t => {
   t.mock.timers.enable({ apis: ['setInterval', 'setTimeout', 'Date'] });
   const f = fixture(); await f.session.start('qinghe');
   t.mock.timers.tick(12001); await f.session.stopping;
-  assert.equal(f.session.snapshot().billing, 'ended'); assert.match(f.session.snapshot().error, /失去响应/);
+  assert.equal(f.session.snapshot().billing, 'ended'); assert.match(f.session.snapshot().error, /应用卡住了/);
 });
 
 test('end to end against the API contract: login, start, first frame reported, stop, billed from the first frame', async t => {
@@ -143,7 +143,7 @@ test('a server-side end (quota reached) stops the client with a clear reason', a
   const f = fixture({ control: 'none' }); await f.session.start('qinghe');
   f.backend.heartbeat = () => Promise.resolve({ state: 'ended', endReason: 'quota_reached' });
   f.session.heartbeat({ frames: 1 }); await new Promise(resolve => setImmediate(resolve)); await f.session.stopping;
-  assert.equal(f.session.snapshot().phase, 'ended'); assert.match(f.session.snapshot().error, /时长已用完/);
+  assert.equal(f.session.snapshot().phase, 'ended'); assert.match(f.session.snapshot().error, /时长用完了/);
 });
 
 test('proxy backend shows our server\'s login messages and keeps the token out of the account object', async t => {

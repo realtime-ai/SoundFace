@@ -23,6 +23,6 @@ test('a returned virtual track is closed even when enumeration claimed a physica
   let stops = 0;
   const track = { label: 'SoundFace Camera', stop: () => stops++ };
   const media = { enumerateDevices: async () => devices, getUserMedia: async () => ({ getVideoTracks: () => [track], getTracks: () => [track] }) };
-  await assert.rejects(camera.open(media), /不能把 SoundFace Camera/);
+  await assert.rejects(camera.open(media), /不能选 SoundFace Camera/);
   assert.equal(stops, 1);
 });

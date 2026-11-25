@@ -3,7 +3,7 @@ const { createInterface } = require('node:readline');
 const { EventEmitter } = require('node:events');
 
 class AudioBridge extends EventEmitter {
-  constructor(binary, label = '音频') { super(); this.label = label; this.binary = binary; this.pending = new Map(); this.sequence = 0; this.child = null; }
+  constructor(binary, label = '虚拟麦克风') { super(); this.label = label; this.binary = binary; this.pending = new Map(); this.sequence = 0; this.child = null; }
   launch() {
     if (this.child) return;
     const child = spawn(this.binary, [], { stdio: ['pipe', 'pipe', 'pipe'] });
@@ -11,9 +11,9 @@ class AudioBridge extends EventEmitter {
     const fail = () => {
       if (this.child !== child) return;
       this.child = null;
-      for (const { reject, timer } of this.pending.values()) { clearTimeout(timer); reject(new Error(this.label + '引擎已停止，请重试。')); }
+      for (const { reject, timer } of this.pending.values()) { clearTimeout(timer); reject(new Error(this.label + '停了，请重新开启。')); }
       this.pending.clear();
-      this.emit('stopped', this.label + '引擎已停止。');
+      this.emit('stopped', this.label + '停了，请重新开启。');
     };
     child.on('error', fail); child.on('exit', fail);
     child.stdin.on('error', fail);
@@ -27,7 +27,7 @@ class AudioBridge extends EventEmitter {
       const request = this.pending.get(data.id);
       if (!request) return;
       clearTimeout(request.timer); this.pending.delete(data.id);
-      if (data.ok) request.resolve(data); else request.reject(new Error(data.error || this.label + '操作失败'));
+      if (data.ok) request.resolve(data); else request.reject(new Error(data.error || '没有成功，请再试一次。'));
     });
   }
   command(action, args = {}) {
@@ -36,7 +36,7 @@ class AudioBridge extends EventEmitter {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(this.label + '引擎响应超时，已停止采集。'));
+        reject(new Error(this.label + '停了，请重新开启。'));
         this.child?.kill();
       }, 8000);
       this.pending.set(id, { resolve, reject, timer });

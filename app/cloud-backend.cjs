@@ -8,18 +8,18 @@ class ProxyBackend {
   }
   get configured() { return Boolean(this.baseUrl && this.token); }
   async request(method, route, body, timeoutMs = 15000) {
-    if (!this.baseUrl) throw new Error('云端服务未配置，请更新应用或联系支持。');
+    if (!this.baseUrl) throw new Error('服务暂时用不了，请更新到最新版，或联系客服。');
     let response;
     try {
       response = await this.fetchImpl(this.baseUrl + route, { method, headers: { 'Content-Type': 'application/json', ...(this.token ? { Authorization: 'Bearer ' + this.token } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(timeoutMs) });
-    } catch { throw new Error('无法连接 SoundFace 服务，请检查网络。'); }
+    } catch { throw new Error('连不上服务器，请检查网络。'); }
     let data = {}; try { data = await response.json(); } catch { /* non-JSON error page */ }
     if (!response.ok) {
       const code = String(data.code || 'REQUEST_FAILED').replace(/[^A-Z_]/g, '').slice(0, 60);
-      const messages = { UNAUTHENTICATED: '登录已失效，请重新登录。', QUOTA_EXHAUSTED: '余额不足 1 分钟，请先充值。', SESSION_ACTIVE: '上一场会话尚未结束确认，请先结束。', UPSTREAM_CREATE_FAILED: '生成服务暂时不可用，请稍后重试。' };
+      const messages = { UNAUTHENTICATED: '登录过期了，请重新登录。', QUOTA_EXHAUSTED: '剩余时长不到 1 分钟，请先充值。', SESSION_ACTIVE: '上一次的数字人还没完全停止，请先点“停止数字人”。', UPSTREAM_CREATE_FAILED: '数字人服务暂时用不了，请过一会儿再试。' };
       // Validation and login messages are authored by our own server; show them as-is.
       const own = [400, 402, 429].includes(response.status) && typeof data.message === 'string' && data.message.length <= 60 ? data.message : '';
-      throw Object.assign(new Error(messages[code] || own || `服务请求失败（${response.status} · ${code}）`), { code, status: response.status });
+      throw Object.assign(new Error(messages[code] || own || `出了点问题，请再试一次。（错误代码：${response.status} · ${code}）`), { code, status: response.status });
     }
     return data;
   }

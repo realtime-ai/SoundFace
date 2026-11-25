@@ -32,13 +32,13 @@ class LiveCompositor {
       // Burned into pixels so every downstream app keeps the synthesis label.
       ctx.fillStyle = 'rgba(43, 63, 181, 0.85)'; ctx.fillRect(LIVE_WIDTH - 318, 24, 294, 44);
       ctx.fillStyle = '#ffffff'; ctx.font = '20px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-      ctx.fillText(shown === 'test' ? 'LOCAL TEST · SoundFace' : 'AI GENERATED · SoundFace', LIVE_WIDTH - 304, 53);
+      ctx.fillText(shown === 'test' ? '测试画面 · SoundFace' : 'AI 合成 · SoundFace', LIVE_WIDTH - 304, 53);
     } else {
       ctx.fillStyle = '#4c6fff'; ctx.fillRect(LIVE_WIDTH / 2 - 36, LIVE_HEIGHT / 2 - 92, 72, 6);
       ctx.fillStyle = '#ffffff'; ctx.font = '600 44px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
       ctx.fillText('稍后回来', LIVE_WIDTH / 2, LIVE_HEIGHT / 2);
       ctx.fillStyle = '#c3cde8'; ctx.font = '24px sans-serif';
-      ctx.fillText('BE RIGHT BACK · SoundFace', LIVE_WIDTH / 2, LIVE_HEIGHT / 2 + 48);
+      ctx.fillText('主播马上回来 · SoundFace', LIVE_WIDTH / 2, LIVE_HEIGHT / 2 + 48);
       ctx.textAlign = 'left';
     }
     const now = this.now();

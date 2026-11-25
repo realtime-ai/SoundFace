@@ -3,11 +3,11 @@ const { EventEmitter } = require('node:events');
 class CameraExtension extends EventEmitter {
   constructor(native) { super(); this.native = native; this.timer = null; }
   snapshot() {
-    if (!this.native) return { phase: 'unavailable', message: '激活模块尚未构建，请重新构建开发包。' };
+    if (!this.native) return { phase: 'unavailable', message: '安装程序打不开，请重新下载安装 SoundFace。' };
     return { ...JSON.parse(this.native.inspect()), ...JSON.parse(this.native.status()) };
   }
   activate() {
-    if (!this.native) throw new Error('摄像头激活模块不可用');
+    if (!this.native) throw new Error('安装程序打不开，请重新下载安装 SoundFace。');
     JSON.parse(this.native.activate());
     clearInterval(this.timer);
     const poll = () => {

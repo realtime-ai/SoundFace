@@ -9,7 +9,7 @@ class GeneratedVideoRelay {
     if (!this.liveID || this.busy || !this.allowed(this.liveID) || packet?.liveID !== this.liveID || packet.frameToken !== this.frameToken) return { forwarded: false };
     const age = this.now() - packet.capturedAt;
     if (!Number.isFinite(age) || age < -50 || age > 250) return { forwarded: false };
-    if (!(packet.bytes instanceof Uint8Array) || packet.bytes.length < 4 || packet.bytes.length > 524288 || packet.bytes[0] !== 0xff || packet.bytes[1] !== 0xd8) throw new Error('生成帧格式无效');
+    if (!(packet.bytes instanceof Uint8Array) || packet.bytes.length < 4 || packet.bytes.length > 524288 || packet.bytes[0] !== 0xff || packet.bytes[1] !== 0xd8) throw new Error('出了点问题，请再试一次。（错误代码：生成帧格式无效）');
     this.busy = true;
     try {
       await this.bridge.command('frame', { liveID: this.liveID, capturedAt: packet.capturedAt, jpeg: Buffer.from(packet.bytes).toString('base64') });

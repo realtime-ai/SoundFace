@@ -31,7 +31,7 @@ test('frames always carry the AI label and brand corner; only given inputs are d
   assert.equal(canvas.width, 720); assert.equal(canvas.height, 1280);
   assert.deepEqual(calls.filter(c => c[0] === 'drawImage').map(c => c[1]), [video]);
   const texts = calls.filter(c => c[0] === 'fillText').map(c => c[1]);
-  assert.ok(texts.includes('AI GENERATED · SoundFace')); assert.ok(texts.includes('SoundFace 声面'));
+  assert.ok(texts.includes('AI 合成 · SoundFace')); assert.ok(texts.includes('SoundFace 声面'));
 });
 
 test('during the transition the reference image is drawn blurred before the generated picture', () => {
@@ -64,7 +64,7 @@ test('compare transition shows only the generic silhouette first, then wipes to 
   composer.startTransition('compare'); time = 100;
   composer.render('cloud', video, reference);
   assert.equal(calls.filter(c => c[0] === 'drawImage').length, 0, 'built-in silhouette is vector-drawn, no image');
-  assert.ok(calls.some(c => c[0] === 'fillText' && c[1] === 'BEFORE'));
+  assert.ok(calls.some(c => c[0] === 'fillText' && c[1] === '变身前'));
   calls.length = 0; time = CLIP_COMPARE_MS * 0.8;
   composer.render('cloud', video, reference);
   assert.deepEqual(calls.filter(c => c[0] === 'drawImage').map(c => c[1]), [video]);

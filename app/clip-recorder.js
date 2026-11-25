@@ -33,11 +33,11 @@
     $('clip-preview').hidden = true;
   }
   async function start() {
-    if (!MIME) throw new Error('当前环境不支持录制 MP4。');
+    if (!MIME) throw new Error('这台电脑暂时不能录制视频。');
     if (audio.privacy) throw new Error('请先退出隐私暂停。');
     const stream = $('clip-preview').captureStream(FPS);
     if ($('clip-mic').checked) {
-      if (!await api.clipMicPermission()) throw new Error('麦克风权限未开启，请在系统设置中允许 SoundFace，或取消“录入麦克风声音”。');
+      if (!await api.clipMicPermission()) throw new Error('没有麦克风权限。请到“系统设置 → 隐私与安全性 → 麦克风”里允许 SoundFace，或取消勾选“同时录下我的声音”。');
       micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, video: false });
       // Generated video lags the live voice by the cloud round trip. Delay the
       // microphone by the same amount so lips and voice line up in the clip.
@@ -65,25 +65,25 @@
     active.stream.getTracks().forEach(track => track.stop());
     stopLoop(); drawPanel();
     const blob = new Blob(chunks, { type: 'video/mp4' }); chunks = [];
-    if (!blob.size) { message('没有录到画面。'); return; }
+    if (!blob.size) { message('没有录到画面，请重新录。'); return; }
     saving = true; drawPanel();
     try {
       const saved = await api.saveClip(new Uint8Array(await blob.arrayBuffer()));
-      message((notice ? notice + ' ' : '') + (saved ? '片段已保存：' + saved : '已取消保存，片段已丢弃。'));
+      message((notice ? notice + ' ' : '') + (saved ? '短视频已保存：' + saved : '已取消，这段视频没有保存。'));
     } finally { saving = false; drawPanel(); }
   }
   function drawPanel() {
     const recording = Boolean(recorder);
-    $('clip-toggle').textContent = saving ? '正在保存…' : recording ? '停止并保存' : '开始录制竖屏片段';
+    $('clip-toggle').textContent = saving ? '正在保存…' : recording ? '停止并保存' : '开始录制';
     $('clip-toggle').disabled = saving || (!recording && audio.privacy);
     for (const id of ['clip-test', 'clip-mic', 'clip-transition']) $(id).disabled = recording || saving;
     const seconds = recording ? Math.floor((Date.now() - startedAt) / 1000) : 0;
-    const names = { cloud: '数字人画面', test: '本地测试画面', placeholder: '占位画面' };
-    $('clip-badge').textContent = recording ? `录制中 ${seconds}s / 60s` : '未录制';
+    const names = { cloud: '数字人画面', test: '测试画面', placeholder: '“稍后回来”画面' };
+    $('clip-badge').textContent = recording ? `录制中 ${seconds} 秒 / 60 秒` : '未录制';
     $('clip-badge').className = 'tag' + (recording ? ' on' : '');
     $('clip-detail').textContent = recording
-      ? `当前画面：${names[lastSource] || lastSource}。最长 60 秒，到时自动停止。`
-      : '9:16 竖屏 MP4，带 AI 标识和品牌角标。当前云端画面为横屏，居中裁切后约 306×544，放大到 720×1280，画质偏低。';
+      ? `正在录：${names[lastSource] || lastSource}。最长 60 秒，到时间自动停止。`
+      : '录成竖屏视频，带“AI 合成”标识。现在是从横屏画面中间裁出来的，清晰度偏低。';
   }
   $('clip-toggle').onclick = async () => {
     try { message(''); if (recorder) await stop(); else await start(); }

@@ -6,47 +6,57 @@ let cameraInstall = { phase: 'idle' };
 function drawCameraInstall() {
   const pending = ['activating', 'awaiting_approval'].includes(cameraInstall.phase);
   $('camera-activate').disabled = busy || pending || video.running || !cameraInstall.installEntitlement || cameraInstall.phase === 'unavailable';
-  $('camera-activate').textContent = pending ? '正在启用…' : '启用摄像头组件';
+  $('camera-activate').textContent = pending ? '正在安装…' : '安装虚拟摄像头';
   const signature = !cameraInstall.installEntitlement ? '本机功能验证包 · 激活扩展请使用专用摄像头测试包' : cameraInstall.team && cameraInstall.team === cameraInstall.extensionTeam ? '团队签名已配置' : 'ad-hoc 开发签名 · 仅用于专用测试环境';
-  $('camera-activation-status').textContent = (cameraInstall.message || signature) + (cameraInstall.domain ? ` (${cameraInstall.domain} ${cameraInstall.code})` : '');
+  $('camera-activation-status').textContent = cameraInstall.message || '';
+  $('camera-signing-status').textContent = signature + (cameraInstall.domain ? ` (${cameraInstall.domain} ${cameraInstall.code})` : '');
 }
-function productMessage(text) { return String(text || '').replace(/Vidu/gi, '云端服务').replace(/阿里云 RTC/g, '实时连接'); }
-function message(text) { $('message').textContent = productMessage(text); $('message').hidden = !text; }
+function productMessage(text) { return String(text || '').replace(/Vidu/gi, '服务').replace(/阿里云 RTC/g, '实时连接'); }
+// `kind` tags a message so later code can recognise it without comparing text.
+function message(text, kind = '') { $('message').textContent = productMessage(text); $('message').dataset.kind = text ? kind : ''; $('message').hidden = !text; }
 function draw() {
   const probing = video.running && video.inputUID === 'vidu-probe';
   $('video-toggle').disabled = busy || audio.privacy || probing || (!video.running && (!cameraAvailable || !$('video-input').value));
   $('video-toggle').textContent = video.running && !probing ? '停止虚拟摄像头' : '开启虚拟摄像头';
   $('video-input').disabled = video.running || audio.privacy || busy;
-  $('video-badge').textContent = probing ? '本机验证中' : video.running ? (video.submitted > 0 ? '输出中' : '等待首帧') : cameraAvailable ? '设备可见' : '待激活';
+  $('video-badge').textContent = probing ? '检查中' : video.running ? (video.submitted > 0 ? '已开启' : '等待数字人画面') : cameraAvailable ? '已安装' : '未安装';
   $('video-badge').className = 'tag ' + (video.running ? 'on' : cameraAvailable ? '' : 'warning');
-  if (probing) $('video-detail').textContent = `生成画面 → 原生 BGRA / CMSampleBuffer：已转换 ${video.converted || 0} 帧，丢弃 ${video.dropped || 0} 帧。当前为本机验证，未向 CMIO 设备入队。`;
-  else if (video.running) $('video-detail').textContent = `${video.inputUID === 'vidu' ? 'AI 生成画面' : video.inputUID === 'test-pattern' ? '本地动态测试画面（无云端费用）' : '本地原始画面'} → 虚拟摄像头。已入队 ${video.submitted || 0} 帧，丢弃 ${video.dropped || 0} 帧；入队计数不代表会议已收到画面。`;
-  else $('video-detail').textContent = cameraAvailable ? '会议中选择 SoundFace Camera。停止输出时将显示隐私画面。' : '请先在“组件与诊断”中启用摄像头组件。';
-  $('video-probe').textContent = probing ? '停止帧链路检查' : '检查生成帧链路';
-  $('meeting-readiness').textContent = `摄像头${cameraAvailable ? '已就绪' : '需要启用组件'} · 虚拟麦${installed ? '已就绪' : '需要安装组件'}。画面与声音可以独立开启。`;
+  if (probing) {
+    $('video-detail').textContent = '正在检查画面传输。';
+    $('video-diagnostic').textContent = `生成画面 → 原生 BGRA / CMSampleBuffer：已转换 ${video.converted || 0} 帧，丢弃 ${video.dropped || 0} 帧。当前为本机验证，未向 CMIO 设备入队。`;
+  } else if (video.running) {
+    $('video-detail').textContent = `正在把${video.inputUID === 'vidu' ? '数字人画面' : video.inputUID === 'test-pattern' ? '测试画面（免费）' : '你的真实画面'}送到虚拟摄像头。`;
+    $('video-diagnostic').textContent = `已入队 ${video.submitted || 0} 帧，丢弃 ${video.dropped || 0} 帧；入队计数不代表会议已收到画面。`;
+  } else {
+    $('video-detail').textContent = cameraAvailable ? '在直播软件或会议软件的摄像头列表里选 SoundFace Camera。停止后观众看到的是“稍后回来”画面。' : '还没安装虚拟摄像头。请先点“安装虚拟摄像头”。';
+    $('video-diagnostic').textContent = '';
+  }
+  $('video-probe').textContent = probing ? '停止检查' : '检查画面传输';
+  $('meeting-readiness').textContent = `虚拟摄像头：${cameraAvailable ? '已就绪' : '还没安装'} · 虚拟麦克风：${installed ? '已就绪' : '还没安装'}。`;
   drawCameraInstall();
-  $('audio-toggle').textContent = audio.running ? '停止虚拟麦' : '开启虚拟麦';
+  $('audio-toggle').textContent = audio.running ? '关闭虚拟麦克风' : '开启虚拟麦克风';
   $('audio-toggle').disabled = busy || audio.privacy || (!audio.running && (!installed || !$('audio-input').value));
   $('audio-input').disabled = busy || audio.running || audio.privacy;
   $('mute').disabled = busy || !audio.running;
   $('mute').textContent = audio.muted ? '取消静音' : '静音';
   $('mute').setAttribute('aria-pressed', String(audio.muted));
-  $('audio-badge').textContent = audio.running ? (audio.muted ? '已静音' : '路由运行中') : '未开启';
+  $('audio-badge').textContent = audio.running ? (audio.muted ? '已静音' : '已开启') : '未开启';
   $('audio-badge').className = 'tag' + (audio.running && !audio.muted ? ' on' : '');
   document.querySelector('.sound-visual').classList.toggle('on', audio.running && !audio.muted);
   const db = value => Number.isFinite(value) && value > 0 ? Math.max(-96, 20 * Math.log10(value)).toFixed(1) : '−∞';
   const rates = audio.levels?.inputSampleRate && audio.levels.inputSampleRate !== audio.levels.sampleRate ? `当前输入 ${audio.levels.inputSampleRate / 1000} → 输出 ${audio.levels.sampleRate / 1000} kHz` : `${audio.levels?.sampleRate / 1000} kHz`;
-  $('audio-levels').textContent = audio.running ? audio.levels ? `输入 ${db(audio.levels.inputPeak)} / 输出 ${db(audio.levels.outputPeak)} dBFS · ${rates}` : '等待音频帧…' : '尚未采集音频';
+  $('audio-levels').textContent = audio.running ? audio.muted ? '已静音' : '正在把你的声音送到虚拟麦克风' : '麦克风未开启';
+  $('audio-diagnostic').textContent = audio.running ? audio.levels ? `输入 ${db(audio.levels.inputPeak)} / 输出 ${db(audio.levels.outputPeak)} dBFS · ${rates}` : '等待音频帧…' : '';
   $('privacy-text').textContent = audio.privacy ? '退出隐私暂停' : '隐私暂停';
   $('privacy').classList.toggle('active', audio.privacy);
   $('privacy').setAttribute('aria-pressed', String(audio.privacy));
   $('privacy-slate').hidden = !audio.privacy;
   $('camera-toggle').disabled = audio.privacy;
-  $('camera-toggle').textContent = stream ? '关闭镜头' : '开启镜头';
+  $('camera-toggle').textContent = stream ? '关闭摄像头' : '开启摄像头';
   $('camera-input').disabled = Boolean(stream) || audio.privacy;
-  $('preview-badge').textContent = audio.privacy ? '已暂停' : stream ? '镜头就绪' : '待机';
-  $('preview-label').textContent = audio.privacy ? '隐私暂停 · 无采集' : '输出画面预览';
-  $('summary').textContent = `${audio.running ? audio.muted ? '虚拟麦已静音' : '虚拟麦路由运行中' : '虚拟麦未开启'} · ${probing ? '生成帧本机验证' : video.running ? '虚拟摄像头输出中' : stream ? '摄像头本地预览' : '摄像头未采集'}`;
+  $('preview-badge').textContent = audio.privacy ? '已暂停' : stream ? '摄像头已开启' : '未开启';
+  $('preview-label').textContent = audio.privacy ? '隐私暂停中 · 摄像头和麦克风都已关闭' : '观众看到的画面';
+  $('summary').textContent = `${audio.running ? audio.muted ? '虚拟麦克风已静音' : '虚拟麦克风已开启' : '虚拟麦克风未开启'} · ${probing ? '检查中' : video.running ? '虚拟摄像头已开启' : stream ? '摄像头预览中' : '摄像头未开启'}`;
   if (typeof cloudDraw === 'function') cloudDraw();
 }
 async function run(action) {
@@ -66,19 +76,19 @@ async function refresh() {
   if ([...select.options].some(option => option.value === previous)) select.value = previous;
   else if ([...select.options].some(option => option.value === 'BuiltInMicrophoneDevice')) select.value = 'BuiltInMicrophoneDevice';
   if (audio.running) select.value = audio.inputUID;
-  $('driver-status').textContent = installed ? '输入与内部输出均已被系统枚举' : '系统尚未加载 SoundFace 音频组件';
+  $('driver-status').textContent = installed ? '虚拟麦克风已安装' : '还没安装虚拟麦克风';
   $('driver-dot').classList.toggle('on', installed);
-  $('install').textContent = installed ? '重新安装组件' : '安装音频组件';
+  $('install').textContent = installed ? '重新安装虚拟麦克风' : '安装虚拟麦克风';
   const previousVideo = $('video-input').value; $('video-input').replaceChildren();
   const generated = document.createElement('option'); generated.value = 'vidu'; generated.textContent = '数字人画面'; $('video-input').append(generated);
-  const testPattern = document.createElement('option'); testPattern.value = 'test-pattern'; testPattern.textContent = '本地测试画面 · 免费'; $('video-input').append(testPattern);
+  const testPattern = document.createElement('option'); testPattern.value = 'test-pattern'; testPattern.textContent = '测试画面（免费）'; $('video-input').append(testPattern);
   for (const camera of status.camera.inputs) {
-    const option = document.createElement('option'); option.value = camera.uid; option.textContent = camera.name + ' · 原始画面'; $('video-input').append(option);
+    const option = document.createElement('option'); option.value = camera.uid; option.textContent = camera.name + ' · 你的真实画面（会露脸）'; $('video-input').append(option);
   }
   if ([...$('video-input').options].some(option => option.value === previousVideo)) $('video-input').value = previousVideo;
   if (video.running && video.inputUID !== 'vidu-probe') $('video-input').value = video.inputUID;
-  $('camera-status').textContent = status.camera.deviceVisible ? '在会议软件中选择此摄像头' : '摄像头组件尚未启用';
-  if (!cameraAvailable) $('camera-setup').open = true;
+  $('camera-status').textContent = status.camera.deviceVisible ? '在直播软件或会议软件的摄像头列表里选 SoundFace Camera。' : '还没安装虚拟摄像头。';
+  $('camera-system-status').textContent = status.camera.message || '';
   draw();
 }
 function stopCamera() {
@@ -88,7 +98,7 @@ function stopCamera() {
 }
 async function startCamera() {
   const generation = ++cameraGeneration;
-  if (!await api.cameraPermission()) throw new Error('摄像头权限未开启，请在系统设置中允许 SoundFace。');
+  if (!await api.cameraPermission()) throw new Error('没有摄像头权限。请到“系统设置 → 隐私与安全性 → 摄像头”里允许 SoundFace。');
   if (generation !== cameraGeneration || audio.privacy) return;
   const deviceId = $('camera-input').value;
   const next = await SoundFaceCameraInput.open(navigator.mediaDevices, deviceId);
@@ -106,7 +116,7 @@ async function startCamera() {
 $('audio-toggle').onclick = () => run(async () => {
   if (audio.running) await api.stopAudio();
   else {
-    message('正在开启麦克风。如 macOS 弹出权限提示，请选择“允许”。');
+    message('正在开启麦克风。如果电脑弹出询问，请点“允许”。');
     audio = await api.startAudio($('audio-input').value); message('');
   }
 });
@@ -123,7 +133,7 @@ $('install').onclick = () => run(async () => message(await api.installAudio()));
 $('privacy').onclick = async () => {
   const next = !audio.privacy;
   if (next) { audio.privacy = true; stopCamera(); if (typeof endCloud === 'function') void endCloud(); draw(); }
-  try { audio = await api.privacy(next); if (next) message('采集已停止。退出隐私暂停后，请手动重新开启所需设备。'); }
+  try { audio = await api.privacy(next); if (next) message('已进入隐私暂停，摄像头和麦克风都关了。退出后需要你自己重新开启。'); }
   catch (error) { message(error.message); }
   draw();
 };

@@ -83,51 +83,51 @@ final class VideoRouter: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate 
     func start(uid: String, liveID: String = "") throws {
         stop()
         if uid == "vidu-probe" {
-            guard !liveID.isEmpty else { throw VideoError.message("缺少数字人会话标识") }
+            guard !liveID.isEmpty else { throw VideoError.message("虚拟摄像头出了点问题，请关闭后重新开启。（错误代码：缺少数字人会话标识）") }
             try prepareFrames(); generatedSession = liveID; probe = true; return
         }
-        guard let (device, stream) = sink() else { throw VideoError.message("SoundFace Camera 尚未激活，当前无法输出到虚拟摄像头。") }
+        guard let (device, stream) = sink() else { throw VideoError.message("还没安装虚拟摄像头。请先点“安装虚拟摄像头”。") }
         let generated = uid == "vidu" || uid == "test-pattern"
-        guard !generated || !liveID.isEmpty else { throw VideoError.message("缺少数字人会话标识") }
+        guard !generated || !liveID.isEmpty else { throw VideoError.message("虚拟摄像头出了点问题，请关闭后重新开启。（错误代码：缺少数字人会话标识）") }
         let inputDevice = generated ? nil : cameras().first(where: { $0.uniqueID == uid })
         guard generated || inputDevice != nil else { throw VideoError.message("摄像头已断开，请重新选择。") }
         guard generated || AVCaptureDevice.authorizationStatus(for: .video) == .authorized else { throw VideoError.message("请先允许 SoundFace 使用摄像头。") }
         var copiedQueue: Unmanaged<CMSimpleQueue>?
         let queueStatus = CMIOStreamCopyBufferQueue(stream, { _, _, _ in }, nil, &copiedQueue)
-        guard queueStatus == noErr, let copiedQueue else { throw VideoError.message("无法打开摄像头输入队列 (\(queueStatus))") }
+        guard queueStatus == noErr, let copiedQueue else { throw VideoError.message("虚拟摄像头出了点问题，请关闭后重新开启。（错误代码：无法打开摄像头输入队列 \(queueStatus)）") }
         outputQueue = copiedQueue.takeRetainedValue(); deviceID = device; streamID = stream
         do {
             var endProperty = address(kCMIOStreamPropertyEndOfData); var ended: UInt32 = 0
             _ = CMIOObjectSetPropertyData(stream, &endProperty, 0, nil, 4, &ended)
             let startStatus = CMIODeviceStartStream(device, stream)
-            guard startStatus == noErr else { throw VideoError.message("虚拟摄像头拒绝接收画面 (\(startStatus))") }
+            guard startStatus == noErr else { throw VideoError.message("虚拟摄像头出了点问题，请关闭后重新开启。（错误代码：虚拟摄像头拒绝接收画面 \(startStatus)）") }
             try prepareFrames()
             if generated { generatedSession = liveID; return }
-            guard let inputDevice else { throw VideoError.message("摄像头输入不可用") }
+            guard let inputDevice else { throw VideoError.message("摄像头用不了，请检查是否接好，然后重新开启。") }
             let capture = AVCaptureSession(); capture.beginConfiguration()
             if capture.canSetSessionPreset(.hd1280x720) { capture.sessionPreset = .hd1280x720 }
             let input = try AVCaptureDeviceInput(device: inputDevice)
-            guard capture.canAddInput(input) else { throw VideoError.message("摄像头输入不可用") }
+            guard capture.canAddInput(input) else { throw VideoError.message("摄像头用不了，请检查是否接好，然后重新开启。") }
             capture.addInput(input)
             let output = AVCaptureVideoDataOutput()
             output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
             output.alwaysDiscardsLateVideoFrames = true; output.setSampleBufferDelegate(self, queue: queue)
-            guard capture.canAddOutput(output) else { throw VideoError.message("无法创建摄像头输出") }
+            guard capture.canAddOutput(output) else { throw VideoError.message("摄像头用不了，请检查是否接好，然后重新开启。") }
             capture.addOutput(output); capture.commitConfiguration(); session = capture; captureOutput = output
             let token = generation
             for name in [AVCaptureSession.runtimeErrorNotification, AVCaptureSession.wasInterruptedNotification] {
                 observers.append(NotificationCenter.default.addObserver(forName: name, object: capture, queue: nil) { [weak self] _ in
-                    self?.queue.async { [weak self] in guard let self, self.generation == token else { return }; self.stop(); emit(["event": "stopped", "reason": "摄像头采集中断，已停止虚拟输出。请检查设备后重新开启。"] ) }
+                    self?.queue.async { [weak self] in guard let self, self.generation == token else { return }; self.stop(); emit(["event": "stopped", "reason": "摄像头用不了，请检查是否接好，然后重新开启。"] ) }
                 })
             }
             capture.startRunning()
-            guard capture.isRunning else { throw VideoError.message("摄像头未开始采集") }
+            guard capture.isRunning else { throw VideoError.message("摄像头用不了，请检查是否接好，然后重新开启。") }
         } catch { stop(); throw error }
     }
     private func prepareFrames() throws {
         let attrs: [String: Any] = [kCVPixelBufferWidthKey as String: 1280, kCVPixelBufferHeightKey as String: 720, kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA, kCVPixelBufferIOSurfacePropertiesKey as String: [:]]
-        guard CVPixelBufferPoolCreate(kCFAllocatorDefault, nil, attrs as CFDictionary, &pool) == kCVReturnSuccess else { throw VideoError.message("无法建立视频帧池") }
-        guard CMVideoFormatDescriptionCreate(allocator: kCFAllocatorDefault, codecType: kCVPixelFormatType_32BGRA, width: 1280, height: 720, extensions: nil, formatDescriptionOut: &descriptionRef) == noErr else { throw VideoError.message("无法建立视频格式") }
+        guard CVPixelBufferPoolCreate(kCFAllocatorDefault, nil, attrs as CFDictionary, &pool) == kCVReturnSuccess else { throw VideoError.message("虚拟摄像头出了点问题，请关闭后重新开启。（错误代码：无法建立视频帧池）") }
+        guard CMVideoFormatDescriptionCreate(allocator: kCFAllocatorDefault, codecType: kCVPixelFormatType_32BGRA, width: 1280, height: 720, extensions: nil, formatDescriptionOut: &descriptionRef) == noErr else { throw VideoError.message("虚拟摄像头出了点问题，请关闭后重新开启。（错误代码：无法建立视频格式）") }
         submitted = 0; dropped = 0; converted = 0; lastReport = 0; nextEnqueue = 0
     }
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
@@ -136,14 +136,14 @@ final class VideoRouter: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate 
         enqueue(CIImage(cvPixelBuffer: image))
     }
     func generatedFrame(_ command: [String: Any]) throws {
-        guard let generatedSession, command["liveID"] as? String == generatedSession else { throw VideoError.message("数字人输出已停止或会话已切换") }
+        guard let generatedSession, command["liveID"] as? String == generatedSession else { throw VideoError.message("虚拟摄像头出了点问题，请关闭后重新开启。（错误代码：数字人输出已停止或会话已切换）") }
         let now = Date().timeIntervalSince1970 * 1000
         let receivedTime = CMClockGetTime(CMClockGetHostTimeClock())
         if let capturedAt = command["capturedAt"] as? Double, capturedAt.isFinite, now - capturedAt > 250 { dropped += 1; report(at: CMClockGetTime(CMClockGetHostTimeClock()).seconds); return }
         guard let encoded = command["jpeg"] as? String, encoded.utf8.count <= 700_000,
               let data = Data(base64Encoded: encoded), let capturedAt = command["capturedAt"] as? Double,
               let image = decodeGeneratedFrame(data, capturedAt: capturedAt, now: now) else {
-            throw VideoError.message("生成帧已过期或格式不受支持")
+            throw VideoError.message("虚拟摄像头出了点问题，请关闭后重新开启。（错误代码：生成帧已过期或格式不受支持）")
         }
         // Preserve local frame age across the wall-clock / host-clock boundary.
         // Re-stamping an old frame as "now" would extend the privacy deadline.

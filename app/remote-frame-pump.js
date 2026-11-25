@@ -28,7 +28,7 @@ class RemoteFramePump {
       // Burn the synthesis label into pixels so downstream apps retain it.
       ctx.fillStyle = '#173c30'; ctx.fillRect(970, 24, 286, 44);
       ctx.fillStyle = '#dcffeb'; ctx.font = '20px sans-serif';
-      ctx.fillText(route.kind === 'test' ? 'LOCAL TEST · SoundFace' : 'AI GENERATED · SoundFace', 982, 53);
+      ctx.fillText(route.kind === 'test' ? '测试画面 · SoundFace' : 'AI 合成 · SoundFace', 982, 53);
       const blob = await new Promise(resolve => this.canvas.toBlob(resolve, 'image/jpeg', 0.86));
       if (!valid() || !blob || blob.size > 524288 || this.now() - capturedAt > 250) { this.stats.skipped++; return; }
       const bytes = new Uint8Array(await blob.arrayBuffer());

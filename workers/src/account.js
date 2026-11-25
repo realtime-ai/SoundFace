@@ -66,7 +66,7 @@ export class AccountObject extends DurableObject {
   provider() {
     if (!this._provider) {
       try { this._provider = makeProvider(this.env, { sql: this.sql, now: this.now }); }
-      catch (error) { console.error('[provider]', error.message); fail(503, 'PROVIDER_UNAVAILABLE', '生成服务暂不可用'); }
+      catch (error) { console.error('[provider]', error.message); fail(503, 'PROVIDER_UNAVAILABLE', '数字人服务暂时用不了，请过一会儿再试。'); }
     }
     return this._provider;
   }
@@ -101,8 +101,8 @@ export class AccountObject extends DurableObject {
   // ---- sessions ----
   async createSession({ image }) {
     const { balance } = this.totals();
-    if (balance < this.minStartSeconds) fail(402, 'QUOTA_EXHAUSTED', '余额不足 1 分钟，请先充值');
-    if (this.openSession()) fail(409, 'SESSION_ACTIVE', '上一场会话尚未结束确认，请先结束');
+    if (balance < this.minStartSeconds) fail(402, 'QUOTA_EXHAUSTED', '剩余时长不到 1 分钟，请先充值。');
+    if (this.openSession()) fail(409, 'SESSION_ACTIVE', '上一次的数字人还没完全停止，请先点“停止数字人”。');
     const provider = this.provider(), id = crypto.randomUUID(), now = this.now();
     // Insert before the upstream await so a concurrent request sees an open session.
     this.sql.exec('INSERT INTO sessions (id, provider, state, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?)', id, provider.name, 'creating', now, now);
@@ -112,12 +112,12 @@ export class AccountObject extends DurableObject {
     catch (error) {
       if (error.liveId) { this.update(id, { live_id: error.liveId, state: 'ending', end_reason: 'create_failed', end_requested_at: this.now() }); this.ctx.waitUntil(this.finish(id)); }
       else this.update(id, { state: 'failed', ended_at: this.now(), end_reason: 'create_failed' });
-      fail(502, 'UPSTREAM_CREATE_FAILED', '生成服务暂时不可用');
+      fail(502, 'UPSTREAM_CREATE_FAILED', '数字人服务暂时用不了，请过一会儿再试。');
     }
     this.update(id, { state: 'active', live_id: created.liveId, conn_id: created.connId || null, secret: created.secret || null, started_at: this.now(), last_seen_at: this.now() });
     return { sessionId: id, provider: provider.name, transport: created.transport, control: created.control, remainingSeconds: balance };
   }
-  own(id) { const session = this.session(id); if (!session) fail(404, 'SESSION_NOT_FOUND', '会话不存在'); return session; }
+  own(id) { const session = this.session(id); if (!session) fail(404, 'SESSION_NOT_FOUND', '找不到这一次的数字人记录'); return session; }
   heartbeat(id, { frames = 0 } = {}) {
     const session = this.own(id);
     if (session.state === 'active') {

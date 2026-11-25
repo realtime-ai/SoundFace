@@ -19,21 +19,21 @@ static void update(NSString *phase, NSDictionary *details) {
 }
 @implementation SFActivation
 - (void)requestNeedsUserApproval:(OSSystemExtensionRequest *)request {
-    update(@"awaiting_approval", @{@"message": @"请在系统设置的摄像头扩展中允许 SoundFace。"});
+    update(@"awaiting_approval", @{@"message": @"请到“系统设置 → 通用 → 登录项与扩展 → 摄像头扩展”里允许 SoundFace。"});
 }
 - (OSSystemExtensionReplacementAction)request:(OSSystemExtensionRequest *)request actionForReplacingExtension:(OSSystemExtensionProperties *)existing withExtension:(OSSystemExtensionProperties *)replacement {
     // Never silently downgrade an installed extension.
     if ([replacement.bundleVersion compare:existing.bundleVersion options:NSNumericSearch] == NSOrderedAscending) return OSSystemExtensionReplacementActionCancel;
-    update(@"activating", @{@"message": @"正在更新 SoundFace Camera…"});
+    update(@"activating", @{@"message": @"正在更新虚拟摄像头…"});
     return OSSystemExtensionReplacementActionReplace;
 }
 - (void)request:(OSSystemExtensionRequest *)request didFinishWithResult:(OSSystemExtensionRequestResult)result {
     @synchronized(SFActivation.class) { pending = NO; }
-    update(result == OSSystemExtensionRequestCompleted ? @"activated" : @"reboot_required", @{@"message": result == OSSystemExtensionRequestCompleted ? @"系统激活请求已完成，正在检查设备枚举。" : @"系统要求重新启动 Mac 后完成激活。"});
+    update(result == OSSystemExtensionRequestCompleted ? @"activated" : @"reboot_required", @{@"message": result == OSSystemExtensionRequestCompleted ? @"安装完成，正在检查…" : @"需要重启电脑才能装好。"});
 }
 - (void)request:(OSSystemExtensionRequest *)request didFailWithError:(NSError *)error {
     @synchronized(SFActivation.class) { pending = NO; }
-    update(@"error", @{@"domain": error.domain, @"code": @(error.code), @"message": error.localizedDescription ?: @"系统拒绝激活摄像头扩展。"});
+    update(@"error", @{@"domain": error.domain, @"code": @(error.code), @"message": error.localizedDescription ?: @"系统没有允许安装虚拟摄像头，请到系统设置里允许后再试。"});
 }
 @end
 
@@ -65,10 +65,10 @@ static napi_value activate(napi_env env, napi_callback_info args) {
     @synchronized(SFActivation.class) {
         if (pending) return json(env, state);
         if (![NSBundle.mainBundle.bundleIdentifier isEqualToString:@"app.soundface.desktop"]) {
-            update(@"error", @{@"message": @"请从 /Applications 启动已打包的 SoundFace，再申请激活。"});
+            update(@"error", @{@"message": @"请先把 SoundFace 拖进“应用程序”文件夹，从那里打开再安装。"});
             return json(env, state);
         }
-        pending = YES; update(@"activating", @{@"message": @"正在向 macOS 申请激活…"});
+        pending = YES; update(@"activating", @{@"message": @"正在安装虚拟摄像头…"});
     }
     dispatch_async(dispatch_get_main_queue(), ^{
         delegate = [SFActivation new];

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, systemPreferences, session, dialog, nativeImage, safeStorage } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, shell, systemPreferences, session, dialog, nativeImage, safeStorage } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
@@ -24,7 +24,7 @@ function sendState(channel, state) {
   if (window && !window.isDestroyed() && !window.webContents.isDestroyed()) window.webContents.send(channel, state);
 }
 function validateSender(event) {
-  if (event.sender !== window?.webContents || event.senderFrame !== window.webContents.mainFrame || event.senderFrame.url !== uiURL) throw new Error('请求来源无效');
+  if (event.sender !== window?.webContents || event.senderFrame !== window.webContents.mainFrame || event.senderFrame.url !== uiURL) throw new Error('出了点问题，请再试一次。（错误代码：请求来源无效）');
 }
 function handle(name, callback) {
   ipcMain.handle(name, async (event, ...args) => {
@@ -33,11 +33,24 @@ function handle(name, callback) {
     catch (error) { return { ok: false, error: error.message }; }
   });
 }
-function inputUID(uid) { if (typeof uid !== 'string' || !uid || uid.length > 512 || uid.startsWith('SoundFace')) throw new Error('请选择物理输入设备'); return uid; }
+function inputUID(uid, kind = 'camera') {
+  if (typeof uid !== 'string' || !uid || uid.length > 512 || uid.startsWith('SoundFace')) throw new Error(kind === 'microphone' ? '这里要选真实的麦克风，不能选 SoundFace Microphone。' : '这里要选电脑上的真实摄像头，不能选 SoundFace Camera。');
+  return uid;
+}
+// Chinese application menu (macOS). Roles keep the standard shortcuts working.
+function setChineseMenu() {
+  if (process.platform !== 'darwin') return;
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    { label: 'SoundFace', submenu: [{ role: 'about', label: '关于 SoundFace' }, { type: 'separator' }, { role: 'hide', label: '隐藏' }, { type: 'separator' }, { role: 'quit', label: '退出 SoundFace' }] },
+    { label: '编辑', submenu: [{ role: 'undo', label: '撤销' }, { role: 'redo', label: '重做' }, { type: 'separator' }, { role: 'cut', label: '剪切' }, { role: 'copy', label: '复制' }, { role: 'paste', label: '粘贴' }, { role: 'selectAll', label: '全选' }] },
+    { label: '窗口', submenu: [{ role: 'minimize', label: '最小化' }, { role: 'close', label: '关闭窗口' }] }
+  ]));
+}
 const cameraBuilt = () => fs.existsSync(app.isPackaged ? path.join(resources, '../Library/SystemExtensions/app.soundface.camera.systemextension') : path.join(resources, 'app.soundface.camera.systemextension'));
 app.whenReady().then(async () => {
+  setChineseMenu();
   bridge = new AudioBridge(path.join(resources, 'soundface-audio'));
-  videoBridge = new AudioBridge(path.join(resources, 'soundface-video'), '视频');
+  videoBridge = new AudioBridge(path.join(resources, 'soundface-video'), '虚拟摄像头');
   let cameraNative;
   try { cameraNative = require(path.join(resources, 'soundface-camera.node')); } catch { /* Report unavailable through status. */ }
   cameraExtension = new CameraExtension(cameraNative);
@@ -49,7 +62,7 @@ app.whenReady().then(async () => {
     directory: path.join(app.getPath('userData'), 'characters'), defaultImage: path.join(root, 'assets/default-character.jpg'), trash: file => shell.trashItem(file),
     normalize: (data, size) => {
       let image = nativeImage.createFromBuffer(data);
-      if (image.isEmpty()) throw new Error('图片无法读取，请换一张 JPG 或 PNG 图片。');
+      if (image.isEmpty()) throw new Error('这张图片打不开，请换一张 JPG 或 PNG 图片。');
       if (Math.max(size.width, size.height) > 1024) image = image.resize(size.width >= size.height ? { width: 1024, quality: 'best' } : { height: 1024, quality: 'best' });
       return { image: image.toJPEG(90), thumbnail: 'data:image/jpeg;base64,' + image.resize({ width: 160, quality: 'best' }).toJPEG(75).toString('base64') };
     }
@@ -69,10 +82,10 @@ app.whenReady().then(async () => {
   const loginFields = { sms: 'phone', email: 'email' };
   const loginBody = (method, id, code) => {
     const field = loginFields[method];
-    if (!field || typeof id !== 'string' || id.length > 254 || (code !== undefined && (typeof code !== 'string' || code.length > 10))) throw new Error('输入无效');
+    if (!field || typeof id !== 'string' || id.length > 254 || (code !== undefined && (typeof code !== 'string' || code.length > 10))) throw new Error('出了点问题，请再试一次。（错误代码：输入无效）');
     return code === undefined ? { [field]: id } : { [field]: id, code };
   };
-  const requireNoSession = () => { if (cloud.starting || cloud.stopping || cloud.live || cloud.state.billing === 'unknown') throw new Error('请先结束当前数字人会话。'); };
+  const requireNoSession = () => { if (cloud.starting || cloud.stopping || cloud.live || cloud.state.billing === 'unknown') throw new Error('请先停止数字人。'); };
   handle('account-code', (method, id) => backend.requestCode(method, loginBody(method, id)));
   handle('account-login', async (method, id, code) => { requireNoSession(); const account = await backend.login(method, loginBody(method, id, code)); saveToken(backend.token); publishAccount(); return account.name; });
   handle('account-redeem', async code => { if (typeof code !== 'string' || code.length > 64) throw new Error('兑换码无效'); const result = await backend.redeem(code); publishAccount(); return { credits: result.credits }; });
@@ -93,13 +106,13 @@ app.whenReady().then(async () => {
     } catch (error) { console.error(error.message); process.exitCode = 1; }
     bridge.close(); videoBridge.close(); app.quit(); return;
   }
-  audio = new CaptureController(bridge, () => systemPreferences.askForMediaAccess('microphone'));
+  audio = new CaptureController(bridge, () => systemPreferences.askForMediaAccess('microphone'), '麦克风');
   video = new CaptureController(videoBridge, async uid => {
     if (uid === 'vidu-probe') return true;
-    if (!(await videoBridge.command('list')).installed) throw new Error('SoundFace Camera 尚未激活，请先申请激活并检查系统返回的状态。');
+    if (!(await videoBridge.command('list')).installed) throw new Error('还没安装虚拟摄像头。请先点“安装虚拟摄像头”。');
     if (['vidu', 'test-pattern'].includes(uid)) return true;
     return systemPreferences.askForMediaAccess('camera');
-  });
+  }, '摄像头');
   audio.on('state', state => sendState('audio-state', state));
   generatedVideo = new GeneratedVideoRelay(videoBridge, liveID => video.state.running && !video.state.privacy && (video.state.inputUID === 'test-pattern' ? video.state.frameLiveID === liveID : ['vidu', 'vidu-probe'].includes(video.state.inputUID) && ['waiting_frames', 'live'].includes(cloud.state.phase) && cloud.state.liveId === liveID));
   video.on('state', state => { if (!state.running) generatedVideo.disarm(); sendState('video-state', state); });
@@ -135,9 +148,9 @@ app.whenReady().then(async () => {
       cloud: { ...cloud.snapshot(), transport: rtcTransport }, cloudDiagnostics: connectionTrace.snapshot(), characters: characters.list()
     };
   });
-  handle('audio-start', uid => audio.start(inputUID(uid)));
+  handle('audio-start', uid => audio.start(inputUID(uid, 'microphone')));
   handle('audio-stop', () => audio.stop());
-  handle('audio-mute', muted => { if (typeof muted !== 'boolean') throw new Error('静音状态无效'); return audio.mute(muted); });
+  handle('audio-mute', muted => { if (typeof muted !== 'boolean') throw new Error('出了点问题，请再试一次。（错误代码：静音状态无效）'); return audio.mute(muted); });
   handle('video-start', async uid => {
     generatedVideo.disarm();
     if (uid === 'test-pattern') {
@@ -148,21 +161,21 @@ app.whenReady().then(async () => {
     }
     if (!['vidu', 'vidu-probe'].includes(uid)) return video.start(inputUID(uid));
     const liveID = cloud.state.liveId;
-    if (cloud.state.phase !== 'live' || !liveID) throw new Error('请先开始数字人验证，等待真实生成画面后再开启输出。');
+    if (cloud.state.phase !== 'live' || !liveID) throw new Error('请先开启数字人，等画面出现后再试。');
     const state = await video.start(uid, { liveID });
-    if (cloud.state.liveId !== liveID || cloud.state.phase !== 'live') { await video.stop(); throw new Error('数字人会话已结束，请重新开始。'); }
+    if (cloud.state.liveId !== liveID || cloud.state.phase !== 'live') { await video.stop(); throw new Error('数字人已停止，请重新开启。'); }
     video.state.frameToken = generatedVideo.arm(liveID); return video.publish();
   });
   handle('video-stop', () => { generatedVideo.disarm(); return video.stop(); });
   handle('video-frame', packet => generatedVideo.frame(packet));
   handle('camera-activate', () => {
-    if (video.state.running) throw new Error('请先停止虚拟摄像头输出再申请激活。');
+    if (video.state.running) throw new Error('请先关闭虚拟摄像头，再安装。');
     return cameraExtension.activate();
   });
-  const requireIdleCharacters = () => { if (cloud.starting || cloud.stopping || cloud.live || cloud.state.billing === 'unknown') throw new Error('请先停止数字人并确认云端会话结束。'); };
+  const requireIdleCharacters = () => { if (cloud.starting || cloud.stopping || cloud.live || cloud.state.billing === 'unknown') throw new Error('上一次的数字人还没完全停止，请先点“停止数字人”。'); };
   handle('characters-import', async () => {
     requireIdleCharacters();
-    const result = await dialog.showOpenDialog(window, { title: '添加角色参考图', buttonLabel: '添加角色', properties: ['openFile'], filters: [{ name: '角色参考图 · JPG / PNG', extensions: ['jpg', 'jpeg', 'png'] }] });
+    const result = await dialog.showOpenDialog(window, { title: '选择角色照片', buttonLabel: '添加角色', properties: ['openFile'], filters: [{ name: '图片（JPG、PNG）', extensions: ['jpg', 'jpeg', 'png'] }] });
     if (result.canceled) return null;
     requireIdleCharacters();
     const character = characters.importFile(result.filePaths[0]);
@@ -176,7 +189,7 @@ app.whenReady().then(async () => {
   handle('cloud-stop', () => cloud.stop());
   handle('cloud-heartbeat', metrics => cloud.heartbeat(metrics));
   handle('privacy', async enabled => {
-    if (typeof enabled !== 'boolean') throw new Error('隐私状态无效');
+    if (typeof enabled !== 'boolean') throw new Error('出了点问题，请再试一次。（错误代码：隐私状态无效）');
     if (enabled) generatedVideo.disarm();
     const results = await Promise.allSettled([audio.setPrivacy(enabled), video.setPrivacy(enabled), ...(enabled ? [cloud.stop('隐私暂停')] : [])]);
     const failed = results.find(item => item.status === 'rejected'); if (failed) throw failed.reason;
@@ -185,25 +198,25 @@ app.whenReady().then(async () => {
   handle('camera-permission', () => systemPreferences.askForMediaAccess('camera'));
   handle('clip-mic-permission', () => systemPreferences.askForMediaAccess('microphone'));
   handle('clip-save', async bytes => {
-    if (!(bytes instanceof Uint8Array) || bytes.length < 8 || bytes.length > 512 * 1024 * 1024) throw new Error('片段数据无效');
-    if (Buffer.from(bytes.subarray(4, 8)).toString('latin1') !== 'ftyp') throw new Error('片段不是 MP4 格式');
+    if (!(bytes instanceof Uint8Array) || bytes.length < 8 || bytes.length > 512 * 1024 * 1024) throw new Error('出了点问题，请再试一次。（错误代码：片段数据无效）');
+    if (Buffer.from(bytes.subarray(4, 8)).toString('latin1') !== 'ftyp') throw new Error('出了点问题，请再试一次。（错误代码：片段不是 MP4 格式）');
     const now = new Date(), pad = value => String(value).padStart(2, '0'), stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
     // Dev-only: automated checks save without a native dialog.
     if (!app.isPackaged && process.env.SOUNDFACE_CLIP_DIR) { const file = path.join(process.env.SOUNDFACE_CLIP_DIR, `SoundFace-${stamp}.mp4`); await fs.promises.writeFile(file, bytes); return file; }
-    const result = await dialog.showSaveDialog(window, { title: '保存竖屏片段', buttonLabel: '保存', defaultPath: path.join(app.getPath('videos'), `SoundFace-${stamp}.mp4`), filters: [{ name: 'MP4 视频', extensions: ['mp4'] }] });
+    const result = await dialog.showSaveDialog(window, { title: '保存短视频', buttonLabel: '保存', defaultPath: path.join(app.getPath('videos'), `SoundFace-${stamp}.mp4`), filters: [{ name: '视频文件（MP4）', extensions: ['mp4'] }] });
     if (result.canceled || !result.filePath) return null;
     await fs.promises.writeFile(result.filePath, bytes);
     return result.filePath;
   });
   handle('install-audio', async () => {
-    if (audio.state.running) throw new Error('请先停止麦克风输出再安装组件。');
+    if (audio.state.running) throw new Error('请先关闭虚拟麦克风，再安装。');
     const installer = app.isPackaged ? path.join(resources, 'SoundFace-Microphone-dev.pkg') : path.join(root, 'dist/SoundFace-Microphone-dev.pkg');
-    const error = await shell.openPath(installer); if (error) throw new Error('无法打开安装器，请重新构建安装包。');
-    return '已打开 macOS 安装器。安装完成后刷新设备；若仍未出现，请保存工作并重启 Mac。';
+    const error = await shell.openPath(installer); if (error) throw new Error('安装程序打不开，请重新下载安装 SoundFace。');
+    return '安装窗口已打开。装完后点“刷新设备”；如果列表里还是没有，请重启电脑。';
   });
   handle('open-settings', kind => {
     const panel = { microphone: 'Privacy_Microphone', camera: 'Privacy_Camera' }[kind];
-    if (!panel) throw new Error('设置类型无效');
+    if (!panel) throw new Error('出了点问题，请再试一次。（错误代码：设置类型无效）');
     return shell.openExternal('x-apple.systempreferences:com.apple.preference.security?' + panel);
   });
   handle('open-guide', () => shell.openPath(app.isPackaged ? path.join(resources, 'DEVELOPMENT.md') : path.join(root, 'docs/DEVELOPMENT.md')));

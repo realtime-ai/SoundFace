@@ -2,8 +2,8 @@
 // Login dialog: email + code or phone + SMS code. Depends on globals: $, api, cloudState, message.
 (() => {
   const methods = {
-    email: { label: '邮箱', type: 'email', inputmode: 'email', autocomplete: 'email', maxlength: 254, placeholder: 'name@example.com', sent: '验证码已发送，请查看邮箱（含垃圾邮件箱）。',
-      normalize: value => value.trim(), check: value => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value) ? '' : '邮箱格式不正确，例如 name@example.com' },
+    email: { label: '邮箱', type: 'email', inputmode: 'email', autocomplete: 'email', maxlength: 254, placeholder: '请输入邮箱', sent: '验证码已发到你的邮箱。没收到的话看看垃圾邮件箱。',
+      normalize: value => value.trim(), check: value => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value) ? '' : '邮箱格式不对，请检查一下' },
     sms: { label: '手机号', type: 'tel', inputmode: 'numeric', autocomplete: 'tel', maxlength: 13, placeholder: '11 位手机号', sent: '验证码已发送，请查看短信。',
       normalize: value => value.replace(/\s+/g, ''), check: value => /^1[3-9]\d{9}$/.test(value) ? '' : '请输入 11 位手机号' }
   };

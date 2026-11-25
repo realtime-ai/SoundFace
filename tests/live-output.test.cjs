@@ -35,7 +35,7 @@ test('compositor burns the AI label over generated video and only draws the give
   assert.equal(compositor.render('cloud', video), 'cloud');
   const drawn = calls.filter(call => call[0] === 'drawImage');
   assert.equal(drawn.length, 1); assert.equal(drawn[0][1], video);
-  assert.ok(calls.some(call => call[0] === 'fillText' && call[1] === 'AI GENERATED · SoundFace'));
+  assert.ok(calls.some(call => call[0] === 'fillText' && call[1] === 'AI 合成 · SoundFace'));
 });
 
 test('compositor draws a slate, never an image, when the source is missing or not drawable', () => {

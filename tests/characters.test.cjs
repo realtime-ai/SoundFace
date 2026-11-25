@@ -26,14 +26,14 @@ test('removal moves the app copy to trash and preserves the original image', asy
   await f.library.remove(item.id);
   assert.equal(f.library.has(item.id), false); assert.ok(fs.existsSync(f.file));
   assert.ok(fs.existsSync(path.join(f.directory, 'trashed/reference.jpg')));
-  await assert.rejects(f.library.remove('qinghe'), /只能移除/);
+  await assert.rejects(f.library.remove('qinghe'), /自带角色不能删除/);
 });
 test('malformed and oversized images are rejected before the native decoder is called', t => {
   const f = fixture(t); let decoded = false; f.library.normalize = () => { decoded = true; };
   fs.writeFileSync(f.file, Buffer.from('not an image'));
-  assert.throws(() => f.library.importFile(f.file), /有效的 JPG/); assert.equal(decoded, false);
+  assert.throws(() => f.library.importFile(f.file), /图片打不开/); assert.equal(decoded, false);
   const png = Buffer.alloc(24); Buffer.from([137,80,78,71,13,10,26,10]).copy(png); png.write('IHDR',12); png.writeUInt32BE(100000,16); png.writeUInt32BE(100000,20);
-  assert.throws(() => validateReference(png), /128–4096/);
+  assert.throws(() => validateReference(png), /太小、太大或太窄/);
   assert.throws(() => validateReference(Buffer.alloc(4 * 1024 * 1024 + 1)), /4 MB/);
 });
 test('tampered metadata and symlink folders cannot become selectable characters', t => {

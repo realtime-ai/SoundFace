@@ -19,7 +19,7 @@ async function main() {
   await fs.rm(path.join(root, 'build/cloud-runtime.json'), { force: true });
   const [folder] = await packager({ dir: stage, out: path.join(root, 'dist'), name: 'SoundFace', executableName: 'SoundFace', appBundleId: 'app.soundface.desktop', appVersion: '0.1.0', buildVersion: '1', platform: 'darwin', arch: process.arch, electronVersion: require('../package.json').devDependencies.electron, overwrite: true, asar: true, prune: false,
     icon: path.join(root, 'assets/icons/SoundFace.icns'),
-    extendInfo: { LSMinimumSystemVersion: '13.0', NSMicrophoneUsageDescription: '将所选麦克风的声音发送到 SoundFace 虚拟麦克风，供会议与录制软件使用。', NSCameraUsageDescription: '预览所选摄像头，并在你主动开启云端会话时生成虚拟形象。', NSSystemExtensionUsageDescription: '提供 SoundFace Camera 虚拟摄像头。' },
+    extendInfo: { LSMinimumSystemVersion: '13.0', NSMicrophoneUsageDescription: 'SoundFace 需要用麦克风，把你的声音送到直播软件。', NSCameraUsageDescription: 'SoundFace 需要用摄像头，按你的动作和表情生成数字人画面。', NSSystemExtensionUsageDescription: '提供 SoundFace Camera 虚拟摄像头。' },
     extraResource: [path.join(root, 'build/soundface-audio'), path.join(root, 'build/soundface-video'), path.join(root, 'build/soundface-camera.node'), path.join(root, 'dist/SoundFace-Microphone-dev.pkg'), path.join(root, 'docs/DEVELOPMENT.md'), path.join(root, 'dist/BlackHole-LICENSE'), path.join(root, 'dist/BlackHole-source.tar.gz'), path.join(root, 'native/audio/SoundFaceConfig.h')]
   });
   const appPath = path.join(folder, 'SoundFace.app');

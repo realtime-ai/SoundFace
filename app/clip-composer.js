@@ -97,8 +97,8 @@ class ClipComposer {
       ctx.fillStyle = '#4c6fff'; ctx.fillRect(split - 3, 0, 6, CLIP_HEIGHT);
     }
     ctx.font = '600 36px sans-serif'; ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
-    if (split < CLIP_WIDTH - 140) { ctx.textAlign = 'right'; ctx.fillText('BEFORE', CLIP_WIDTH - 32, 140); }
-    if (split > 140) { ctx.textAlign = 'left'; ctx.fillText('AFTER', 32, 140); }
+    if (split < CLIP_WIDTH - 140) { ctx.textAlign = 'right'; ctx.fillText('变身前', CLIP_WIDTH - 32, 140); }
+    if (split > 140) { ctx.textAlign = 'left'; ctx.fillText('变身后', 32, 140); }
     ctx.textAlign = 'left';
     this.drawMarks(source);
     ctx.restore();
@@ -109,7 +109,7 @@ class ClipComposer {
     // AI label (always) and brand corner, burned into every exported frame.
     ctx.fillStyle = 'rgba(43, 63, 181, 0.85)'; ctx.fillRect(CLIP_WIDTH - 300, 32, 276, 44);
     ctx.fillStyle = '#ffffff'; ctx.font = '20px sans-serif';
-    ctx.fillText(source === 'test' ? 'LOCAL TEST · SoundFace' : 'AI GENERATED · SoundFace', CLIP_WIDTH - 286, 61);
+    ctx.fillText(source === 'test' ? '测试画面 · SoundFace' : 'AI 合成 · SoundFace', CLIP_WIDTH - 286, 61);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.88)'; ctx.font = '600 30px sans-serif';
     ctx.fillText('SoundFace 声面', 32, CLIP_HEIGHT - 48);
   }

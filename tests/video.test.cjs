@@ -9,7 +9,7 @@ test('video helper enumerates input and rejects output if the extension is missi
   try {
     const list = await bridge.command('list');
     assert.equal(typeof list.installed, 'boolean'); assert.ok(Array.isArray(list.inputs));
-    if (!list.installed) await assert.rejects(bridge.command('start', { uid: list.inputs[0]?.uid || 'none' }), /尚未激活/);
+    if (!list.installed) await assert.rejects(bridge.command('start', { uid: list.inputs[0]?.uid || 'none' }), /还没安装虚拟摄像头/);
     // Never start actual capture from an unattended unit test.
     assert.equal((await bridge.command('stop')).running, false);
     await assert.rejects(bridge.command('unknown'), /未知视频命令/);

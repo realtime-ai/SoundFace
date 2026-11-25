@@ -45,7 +45,7 @@ test('frame pump reads only the supplied remote video and burns an AI label into
   await f.pump.offer(f.element); assert.equal(f.pump.stats.skipped, 1);
   f.finish(); await work;
   assert.equal(f.sent.length, 1); assert.equal(f.draws[0], f.element);
-  assert.match(f.draws[1], /AI GENERATED/); assert.equal(f.sent[0].frameToken, 'token');
+  assert.match(f.draws[1], /AI 合成/); assert.equal(f.sent[0].frameToken, 'token');
   assert.equal(f.pump.stats.forwarded, 1);
 });
 test('local canvas simulation uses the same frame transport with an explicit test label', async () => {
@@ -53,7 +53,7 @@ test('local canvas simulation uses the same frame transport with an explicit tes
   const canvas = { width: 1280, height: 720 };
   const work = f.pump.offer(canvas); f.finish(); await work;
   assert.equal(f.sent.length, 1); assert.equal(f.draws[0], canvas);
-  assert.match(f.draws[1], /LOCAL TEST/); assert.ok(!f.draws[1].includes('AI GENERATED'));
+  assert.match(f.draws[1], /测试画面/); assert.ok(!f.draws[1].includes('AI 合成'));
   assert.equal(f.sent[0].liveID, 'local-test'); assert.equal(f.sent[0].kind, 'test');
 });
 test('stop, stream replacement and stale asynchronous encodes cannot leak a frame', async () => {

@@ -59,7 +59,7 @@ async function route(request, env) {
   if (url.pathname === '/v1/redeem' && method === 'POST') return account(env, userId, 'redeem', { code: String((await readJson(request)).code || '').slice(0, 64) });
   if (url.pathname === '/v1/sessions' && method === 'POST') {
     const body = await readJson(request);
-    if (typeof body.image !== 'string' || !/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/.test(body.image)) fail(400, 'BAD_IMAGE', '参考图无效');
+    if (typeof body.image !== 'string' || !/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/.test(body.image)) fail(400, 'BAD_IMAGE', '这张图片打不开，请换一张 JPG 或 PNG 图片。');
     return account(env, userId, 'createSession', { image: body.image });
   }
   if (parts[1] === 'sessions' && parts[2]) {

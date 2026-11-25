@@ -47,7 +47,7 @@
   function open() {
     if (isOpen()) { child.focus(); return; }
     const win = window.open('about:blank', NAME);
-    if (!win) throw new Error('无法打开直播画面窗口。');
+    if (!win) throw new Error('直播窗口打不开，请再试一次。');
     child = win; setup(win); syncTestSource();
     raf = win.requestAnimationFrame(tick); drawPanel();
   }
@@ -58,17 +58,17 @@
     if (win && !win.closed) win.close();
     syncTestSource(); drawPanel();
   }
-  const sourceNames = { cloud: '数字人画面', test: '本地测试画面', placeholder: '占位画面', privacy: '隐私占位' };
+  const sourceNames = { cloud: '数字人画面', test: '测试画面', placeholder: '“稍后回来”画面', privacy: '“稍后回来”画面' };
   function drawPanel() {
     const open = isOpen();
-    $('live-toggle').textContent = open ? '关闭直播画面窗口' : '打开直播画面窗口';
+    $('live-toggle').textContent = open ? '关闭直播窗口' : '打开直播窗口';
     $('live-test').checked = testMode;
     const stats = compositor?.stats;
-    $('live-badge').textContent = open ? `${sourceNames[stats?.source] || '准备中'} · ${stats?.fps || 0} fps` : '未打开';
+    $('live-badge').textContent = open ? `${sourceNames[stats?.source] || '准备中'} · ${stats?.fps || 0} 帧/秒` : '未打开';
     $('live-badge').className = 'tag' + (open && (stats?.source === 'cloud' || stats?.source === 'test') ? ' on' : '');
     $('live-detail').textContent = open
-      ? 'OBS：来源 → 添加“macOS 屏幕采集”（或“窗口采集”）→ 选择窗口“SoundFace 直播画面”。没有生成画面时显示“稍后回来”，不会出现摄像头原始画面。'
-      : '独立窗口输出 1280 × 720 画面，供 OBS 等直播软件用窗口采集抓取。';
+      ? 'OBS：在“来源”面板点“+”→“macOS 屏幕采集”→ 选择窗口“SoundFace 直播画面”。没有数字人画面时显示“稍后回来”，不会出现你的真实画面。'
+      : '单独开一个窗口显示数字人画面，OBS 等直播软件可以直接抓这个窗口。';
   }
   $('live-toggle').onclick = () => { try { if (isOpen()) close(); else open(); } catch (error) { message(error.message); } };
   $('live-test').onchange = () => { testMode = $('live-test').checked; syncTestSource(); drawPanel(); };

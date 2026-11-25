@@ -9,5 +9,5 @@
 <key>CFBundleShortVersionString</key><string>0.1.0</string>
 <key>LSMinimumSystemVersion</key><string>12.3</string>
 <key>CMIOExtension</key><dict><key>CMIOExtensionMachServiceName</key><string>app.soundface.camera</string></dict>
-<key>NSSystemExtensionUsageDescription</key><string>SoundFace 将处理后的画面提供给会议与录制软件。</string>
+<key>NSSystemExtensionUsageDescription</key><string>SoundFace 把数字人画面提供给直播软件和会议软件。</string>
 </dict></plist>
