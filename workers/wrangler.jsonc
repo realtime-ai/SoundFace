@@ -1,14 +1,15 @@
 {
-  // SoundFace API on Cloudflare Workers. Not deployed yet: deployment needs the
-  // owner's Cloudflare account, a Workers Paid plan (email sending) and a domain
-  // hosted on Cloudflare. Local development: `npm run dev` (see README.md).
+  // SoundFace API on Cloudflare Workers, deployed at https://soundface-api.dot.cc
+  // (api.dot.cc is used by another service). Local development: `npm run dev`.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "soundface-api",
   "main": "src/index.js",
   "compatibility_date": "2026-11-01",
+  "routes": [{ "pattern": "soundface-api.dot.cc", "custom_domain": true }],
+  "workers_dev": false,
   "d1_databases": [
-    // database_id is filled in when the owner creates the database (`wrangler d1 create soundface`).
-    { "binding": "DB", "database_name": "soundface", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }
+    // Production database (APAC), created 2026-11-25.
+    { "binding": "DB", "database_name": "soundface", "database_id": "9c788494-e7f6-469a-91e3-37953c8d74b9", "migrations_dir": "migrations" }
   ],
   "durable_objects": { "bindings": [{ "name": "ACCOUNTS", "class_name": "AccountObject" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AccountObject"] }],
@@ -19,7 +20,7 @@
     "DEV_LOGIN": "0",
     "PROVIDER": "fake",
     "ALLOW_PAID": "0",
-    "MAIL_FROM": "",
+    "MAIL_FROM": "noreply@mail.dot.cc",
     "TRIAL_SECONDS": "0",
     "HEARTBEAT_TIMEOUT_MS": "30000"
   }

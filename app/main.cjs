@@ -67,7 +67,7 @@ app.whenReady().then(async () => {
       return { image: image.toJPEG(90), thumbnail: 'data:image/jpeg;base64,' + image.resize({ width: 160, quality: 'best' }).toJPEG(75).toString('base64') };
     }
   });
-  const serviceConfig = loadServiceConfig({ isPackaged: app.isPackaged });
+  const serviceConfig = loadServiceConfig({ isPackaged: app.isPackaged, packagedUrl: 'https://soundface-api.dot.cc' });
   const backend = new ProxyBackend({ baseUrl: serviceConfig.baseUrl });
   cloud = new CloudSession({ backend, image: id => characters.image(id), characterExists: id => characters.has(id) });
   // Login token persisted with the OS keychain-backed safeStorage; never sent to the renderer.
