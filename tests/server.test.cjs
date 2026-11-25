@@ -158,8 +158,30 @@ test('SMS login: code request, resend limit, wrong code, attempt lock, masked ac
   await assert.rejects(service.login('sms', { phone: '13900139000', code: '000000' }), /过期/);
 });
 
+test('email login: format check, resend limit, wrong code, single use, lowercase account, separate from phone', async () => {
+  const { EmailAuthenticator, DevEmailSender, SmsAuthenticator, DevSmsSender } = require('../server/auth.cjs');
+  let time = 0;
+  const service = new SessionService({ store: new JsonStore(null), provider: new FakeProvider(), now: () => time,
+    authenticators: [new EmailAuthenticator({ sender: new DevEmailSender(), now: () => time }), new SmsAuthenticator({ sender: new DevSmsSender(), now: () => time })] });
+  for (const bad of ['', 'abc', 'a@b', 'a b@x.com', '@x.com', 'x@.com', 'a@x.c']) await assert.rejects(service.requestCode('email', { email: bad }), /正确的邮箱/, bad);
+  const sent = await service.requestCode('email', { email: ' Host@Example.COM ' });
+  assert.equal(sent.resendAfterSeconds, 60); assert.match(sent.devHint, /000000/);
+  await assert.rejects(service.requestCode('email', { email: 'host@example.com' }), /太频繁/);
+  await assert.rejects(service.login('email', { email: 'host@example.com', code: '123456' }), /不正确/);
+  const { account, token } = await service.login('email', { email: 'HOST@example.com', code: '000000' });
+  assert.equal(account.id, 'email:host@example.com'); assert.equal(account.name, 'ho***@example.com'); assert.equal(account.remainingSeconds, 600);
+  await assert.rejects(service.login('email', { email: 'host@example.com', code: '000000' }), /过期/, 'codes are single-use');
+  time += 61_000; await service.requestCode('email', { email: 'host@example.com' });
+  const again = await service.login('email', { email: 'host@example.com', code: '000000' });
+  assert.equal(service.authenticate(again.token).id, service.authenticate(token).id, 'same email returns the same account');
+  await service.requestCode('sms', { phone: '13800138000' });
+  const phone = await service.login('sms', { phone: '13800138000', code: '000000' });
+  assert.notEqual(phone.account.id, account.id, 'phone and email are separate accounts for now');
+});
+
 test('without the development flag no login method (and no fixed SMS code) is registered', async () => {
   const service = new SessionService({ store: new JsonStore(null), provider: new FakeProvider(), authenticators: [] });
   await assert.rejects(service.requestCode('sms', { phone: '13800138000' }), /不可用/);
+  await assert.rejects(service.requestCode('email', { email: 'a@example.com' }), /不可用/);
   await assert.rejects(service.login('dev', { name: 'someone' }), /不可用/);
 });

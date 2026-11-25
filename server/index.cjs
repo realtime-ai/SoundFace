@@ -1,7 +1,7 @@
 'use strict';
 // Development entry: `node server/index.cjs`
 //   PORT (default 8787), SOUNDFACE_DATA (default .soundface-local/server.json)
-//   SOUNDFACE_DEV_LOGIN=1            enable development logins (name login; SMS login with fixed code 000000, nothing sent)
+//   SOUNDFACE_DEV_LOGIN=1            enable development logins (name login; SMS and email login with fixed code 000000, nothing sent)
 //   SOUNDFACE_PROVIDER=fake|vidu      default fake (no network, no cost)
 //   SOUNDFACE_ALLOW_PAID=1 + VIDU_API_KEY   both required for the paid provider
 //   SOUNDFACE_DEFAULT_QUOTA (seconds, default 600)
@@ -9,7 +9,7 @@ const path = require('node:path');
 const { JsonStore } = require('./store.cjs');
 const { SessionService } = require('./service.cjs');
 const { createServer } = require('./http.cjs');
-const { DevAuthenticator, SmsAuthenticator, DevSmsSender } = require('./auth.cjs');
+const { DevAuthenticator, SmsAuthenticator, EmailAuthenticator, DevSmsSender, DevEmailSender } = require('./auth.cjs');
 const { FakeProvider } = require('./providers/fake.cjs');
 
 function provider(env) {
@@ -27,7 +27,7 @@ if (require.main === module) {
   const service = new SessionService({
     store: new JsonStore(env.SOUNDFACE_DATA || path.join(root, '.soundface-local/server.json')),
     provider: provider(env),
-    authenticators: env.SOUNDFACE_DEV_LOGIN === '1' ? [new DevAuthenticator(), new SmsAuthenticator({ sender: new DevSmsSender() })] : [],
+    authenticators: env.SOUNDFACE_DEV_LOGIN === '1' ? [new DevAuthenticator(), new SmsAuthenticator({ sender: new DevSmsSender() }), new EmailAuthenticator({ sender: new DevEmailSender() })] : [],
     defaultQuotaSeconds: Number(env.SOUNDFACE_DEFAULT_QUOTA) || 600
   });
   const port = Number(env.PORT) || 8787;

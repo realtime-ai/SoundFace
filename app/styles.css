@@ -127,3 +127,9 @@ dialog li::marker{color:var(--pink)}
 .preview-controls .source-select{flex:0 1 300px;min-width:180px}
 .preview-controls button{padding:7px 12px}
 .preview-hint{flex:1 1 200px;margin:0;font-size:9px;color:var(--sub);text-align:right}
+
+/* 登录方式切换（邮箱 / 手机号） */
+.login-methods{display:flex;margin-top:14px;width:100%}.login-methods button{flex:1}
+.login-methods button[aria-selected=true]{background:var(--accent);color:#fff}
+.field-error{margin:0;font-size:9px;color:#ff9b9b}.field-error[hidden]{display:none}
+.login-form input[aria-invalid=true]{border-color:#ff6b6b}

@@ -66,13 +66,15 @@ app.whenReady().then(async () => {
     try { if (fs.existsSync(tokenFile) && safeStorage.isEncryptionAvailable()) backend.restore(safeStorage.decryptString(fs.readFileSync(tokenFile))); } catch { saveToken(''); }
     if (backend.token) backend.refreshAccount().then(publishAccount).catch(error => { if (error.status === 401) { backend.logout(); saveToken(''); } publishAccount(); });
   }
-  const phoneBody = (phone, code) => {
-    if (typeof phone !== 'string' || phone.length > 20 || (code !== undefined && (typeof code !== 'string' || code.length > 10))) throw new Error('输入无效');
-    return code === undefined ? { phone } : { phone, code };
+  const loginFields = { sms: 'phone', email: 'email' };
+  const loginBody = (method, id, code) => {
+    const field = loginFields[method];
+    if (!field || typeof id !== 'string' || id.length > 254 || (code !== undefined && (typeof code !== 'string' || code.length > 10))) throw new Error('输入无效');
+    return code === undefined ? { [field]: id } : { [field]: id, code };
   };
   const requireNoSession = () => { if (cloud.starting || cloud.stopping || cloud.live || cloud.state.billing === 'unknown') throw new Error('请先结束当前数字人会话。'); };
-  handle('account-code', phone => backend.requestCode('sms', phoneBody(phone)));
-  handle('account-login', async (phone, code) => { requireNoSession(); const account = await backend.login('sms', phoneBody(phone, code)); saveToken(backend.token); publishAccount(); return account.name; });
+  handle('account-code', (method, id) => backend.requestCode(method, loginBody(method, id)));
+  handle('account-login', async (method, id, code) => { requireNoSession(); const account = await backend.login(method, loginBody(method, id, code)); saveToken(backend.token); publishAccount(); return account.name; });
   handle('account-logout', () => { requireNoSession(); backend.logout(); saveToken(''); publishAccount(); return true; });
   const connectionTrace = new ConnectionTrace();
   const rtcTransport = process.env.SOUNDFACE_RTC_TRANSPORT === 'tcp' ? 'tcp' : 'auto';

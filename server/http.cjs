@@ -1,6 +1,6 @@
 'use strict';
 // HTTP API (node:http only).
-//   POST /v1/auth/:method/code       → { resendAfterSeconds }  (sms)
+//   POST /v1/auth/:method/code       → { resendAfterSeconds }  (sms, email)
 //   POST /v1/auth/:method/login      → { token, account }
 //   GET  /v1/me                      → account (quota, remaining, active session)
 //   POST /v1/sessions  { image }     → { sessionId, provider, transport, control }
