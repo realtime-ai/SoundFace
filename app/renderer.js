@@ -42,10 +42,10 @@ function draw() {
   $('privacy').setAttribute('aria-pressed', String(audio.privacy));
   $('privacy-slate').hidden = !audio.privacy;
   $('camera-toggle').disabled = audio.privacy;
-  $('camera-toggle').textContent = stream ? '关闭预览' : '开启预览';
+  $('camera-toggle').textContent = stream ? '关闭镜头' : '开启镜头';
   $('camera-input').disabled = Boolean(stream) || audio.privacy;
-  $('preview-badge').textContent = audio.privacy ? '已暂停' : stream ? '本地预览' : '未采集';
-  $('preview-label').textContent = audio.privacy ? '隐私暂停 · 无采集' : '本地预览 · 独立控制';
+  $('preview-badge').textContent = audio.privacy ? '已暂停' : stream ? '镜头就绪' : '待机';
+  $('preview-label').textContent = audio.privacy ? '隐私暂停 · 无采集' : '输出画面预览';
   $('summary').textContent = `${audio.running ? audio.muted ? '虚拟麦已静音' : '虚拟麦路由运行中' : '虚拟麦未开启'} · ${probing ? '生成帧本机验证' : video.running ? '虚拟摄像头输出中' : stream ? '摄像头本地预览' : '摄像头未采集'}`;
   if (typeof cloudDraw === 'function') cloudDraw();
 }
@@ -93,7 +93,7 @@ async function startCamera() {
   const deviceId = $('camera-input').value;
   const next = await SoundFaceCameraInput.open(navigator.mediaDevices, deviceId);
   if (generation !== cameraGeneration || audio.privacy) { next.getTracks().forEach(track => track.stop()); return; }
-  stream = next; $('camera-preview').srcObject = stream; $('camera-preview').hidden = false; $('preview-empty').hidden = true;
+  stream = next; $('camera-preview').srcObject = stream; $('camera-preview').hidden = false;
   stream.getVideoTracks()[0].addEventListener('ended', () => { stopCamera(); message('摄像头已断开，请重新选择设备。'); });
   const devices = await navigator.mediaDevices.enumerateDevices();
   const selected = stream.getVideoTracks()[0].getSettings().deviceId;

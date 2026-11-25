@@ -112,3 +112,18 @@ dialog li::marker{color:var(--pink)}
 .clip-preview{background:var(--stage-3)}
 .login-form input{background:var(--surface-2);border-color:var(--line);color:var(--ink)}
 .login-form label{color:var(--sub)}
+/* ===== 首页预览改版（2026-11-25）：预览区是主角，本机镜头缩成右下角小窗 ===== */
+.preview-card{border-color:var(--accent-line)}
+.preview{height:auto;aspect-ratio:16/9;width:100%;max-height:calc(100vh - 250px);min-height:300px;border:1px solid var(--line-strong);box-shadow:0 18px 50px #0009,inset 0 0 0 1px #ffffff08}
+.preview video.source-inset{inset:auto 14px 14px auto;width:clamp(120px,18%,220px);height:auto;aspect-ratio:16/9;object-fit:cover;border:1.5px solid #ffffff55;border-radius:8px;box-shadow:0 6px 20px #000a;z-index:4;background:#000}
+.pip-label{position:absolute;right:14px;bottom:14px;width:clamp(120px,18%,220px);z-index:5;padding:3px 0;border-radius:0 0 8px 8px;background:#000a;color:#fffd;font-size:8px;text-align:center;pointer-events:none}
+.pip-label[hidden]{display:none}
+.reference-portrait{width:96px;height:122px;margin-bottom:16px}
+#preview-empty strong{font-size:19px;letter-spacing:.6px}
+#preview-empty p{font-size:11px}
+.ai-label{font-size:10px;padding:6px 10px}
+.preview-label{font-size:9px}
+.preview-controls{align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap}
+.preview-controls .source-select{flex:0 1 300px;min-width:180px}
+.preview-controls button{padding:7px 12px}
+.preview-hint{flex:1 1 200px;margin:0;font-size:9px;color:var(--sub);text-align:right}

@@ -95,7 +95,7 @@ function cloudDraw() {
   $('camera-input').disabled = active || Boolean(stream) || audio.privacy;
   $('preview-empty').querySelector('strong').textContent = active ? '正在准备你的另一面' : '让另一个你，走到镜头前';
   $('preview-empty').querySelector('p').textContent = active ? '真实镜头显示在右下角，生成结果将显示在这里' : '先选择角色，再开启数字人';
-  $('preview-empty').querySelector('span').textContent = active ? '正在连接 · 仅发送摄像头视频' : '待机中 · 摄像头未采集';
+  $('preview-empty').querySelector('span').textContent = active ? '正在连接 · 仅发送摄像头视频' : stream ? '镜头已就绪 · 小窗仅你可见' : '待机中 · 摄像头未采集';
   if (active) {
     $('preview-badge').textContent = cloudState.phase === 'live' ? '实时生成' : '云端验证';
     $('preview-label').textContent = video.running && video.inputUID === 'vidu' ? 'AI 合成 · 正在提交虚拟摄像头' : 'AI 合成 · 本地回显';
@@ -109,7 +109,8 @@ function cloudDraw() {
     $('preview-empty').hidden = true; $('ai-label').hidden = true;
     $('preview-badge').textContent = '本地测试'; $('preview-label').textContent = '本地模拟 · 无摄像头采集 · 无云端费用';
     $('summary').textContent += ' · 本地动态测试';
-  } else if (!stream && !active) $('preview-empty').hidden = false;
+  } else if (!active) $('preview-empty').hidden = false;
+  $('pip-label').hidden = $('camera-preview').hidden || audio.privacy;
 }
 async function releaseRtc() {
   outputIntent.cancel(); framePump.reset();
@@ -121,7 +122,7 @@ async function releaseRtc() {
   for (const id of ['camera-preview', 'cloud-preview']) {
     const element = $(id); element.srcObject?.getTracks().forEach(track => track.stop()); element.srcObject = null; element.hidden = true;
   }
-  $('camera-preview').classList.remove('source-inset'); $('ai-label').hidden = true; $('preview-empty').hidden = false;
+  $('ai-label').hidden = true; $('preview-empty').hidden = false;
   if (engine) {
     const release = async () => {
       await Promise.allSettled([engine.publishLocalVideoStream(false), engine.enableLocalVideo(false), engine.stopPreview()]);
@@ -163,7 +164,7 @@ async function beginCloud({ output = false } = {}) {
     await engine.setCameraCapturerConfiguration({ ...(deviceId ? { deviceId } : {}), width: 1280, height: 720, frameRate: 30 }); check();
     await engine.setLocalViewConfig($('camera-preview'), 1); check();
     await engine.startPreview(); check();
-    $('camera-preview').classList.add('source-inset'); $('camera-preview').hidden = false;
+    $('camera-preview').hidden = false;
     const { transport } = await api.startCloud(character); check();
     // Provider-neutral seam: the server names the real-time channel to join.
     if (transport.type !== 'alirtc') throw new Error(`当前版本暂不支持该实时通道（${String(transport.type).replace(/[^a-z0-9-]/gi, '').slice(0, 20)}）`);
