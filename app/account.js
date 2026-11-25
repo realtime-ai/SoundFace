@@ -16,7 +16,7 @@
     $('login-send').textContent = remaining > 0 ? `${remaining} 秒后重发` : '获取验证码';
     if (remaining-- <= 0) { clearInterval(countdown); countdown = null; }
   }
-  const hint = text => { $('login-hint').textContent = text; };
+  const hint = (text, error = false) => { $('login-hint').textContent = text; $('login-hint').classList.toggle('field-error', error && Boolean(text)); };
   const fieldError = text => { $('login-id-error').textContent = text; $('login-id-error').hidden = !text; $('login-id').setAttribute('aria-invalid', String(Boolean(text))); };
   function validate() { const error = current().check(idValue()); fieldError(error); return !error; }
   function setMethod(next) {
@@ -32,6 +32,7 @@
   document.querySelectorAll('[data-login-method]').forEach(button => { button.onclick = () => { if (button.dataset.loginMethod !== method) setMethod(button.dataset.loginMethod); }; });
   $('login-id').addEventListener('blur', () => { if ($('login-id').value.trim()) validate(); });
   $('login-id').addEventListener('input', () => { if (!$('login-id-error').hidden) validate(); });
+  $('login-code').addEventListener('input', () => { if ($('login-hint').classList.contains('field-error')) hint(''); });
   $('account-button').onclick = async () => {
     if (!cloudState.account) { hint(''); $('login-code').value = ''; $('login-dialog').showModal(); $('login-id').focus(); return; }
     try { await api.logout(); message('已退出登录。'); } catch (error) { message(error.message); }
@@ -45,17 +46,17 @@
       hint(result.devHint || current().sent);
       remaining = result.resendAfterSeconds || 60; clearInterval(countdown); countdown = setInterval(tickCountdown, 1000); tickCountdown();
       $('login-code').focus();
-    } catch (error) { hint(error.message); $('login-send').disabled = false; }
+    } catch (error) { hint(error.message, true); $('login-send').disabled = false; }
   };
   $('login-form').onsubmit = async event => {
     event.preventDefault();
     if (!validate()) { $('login-id').focus(); return; }
-    if (!/^\d{6}$/.test($('login-code').value.trim())) { hint('请输入 6 位数字验证码'); $('login-code').focus(); return; }
+    if (!/^\d{6}$/.test($('login-code').value.trim())) { hint('请输入 6 位数字验证码', true); $('login-code').focus(); return; }
     $('login-submit').disabled = true;
     try {
       const name = await api.login(method, idValue(), $('login-code').value.trim());
       $('login-dialog').close(); message(`已登录：${name}`);
-    } catch (error) { hint(error.message); $('login-code').select(); }
+    } catch (error) { hint(error.message, true); $('login-code').select(); }
     finally { $('login-submit').disabled = false; }
   };
   api.onCloud(() => drawAccount());

@@ -133,3 +133,4 @@ dialog li::marker{color:var(--pink)}
 .login-methods button[aria-selected=true]{background:var(--accent);color:#fff}
 .field-error{margin:0;font-size:9px;color:#ff9b9b}.field-error[hidden]{display:none}
 .login-form input[aria-invalid=true]{border-color:#ff6b6b}
+.login-form #login-hint.field-error{font-size:10px}
