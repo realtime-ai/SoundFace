@@ -11,13 +11,15 @@ npm test                            # 端到端测试（本地 workerd，不联�
 npm run codes -- create --plan starter --count 5   # 本地生成兑换码
 ```
 
-API 已部署到 https://soundface-api.dot.cc（模拟数字人），生产登录只启用邮箱。D1 已创建并写入 wrangler.jsonc，不要重复创建。实际收信仍待 QQ/163 邮箱确认。
+API 已部署到 https://soundface-api.dot.cc（模拟数字人），生产登录只启用邮箱。D1 已创建并写入 wrangler.jsonc，不要重复创建。用户已确认实际收信；QQ/163 两种邮箱及国内其他网络尚未分别验证。
 
 管理后台页面在仓库根目录 `admin/`，本地地址 http://127.0.0.1:8787/admin/ 。在 `.dev.vars` 配置 `ADMIN_EMAILS=admin@example.com`，使用这个邮箱和开发验证码登录。名单为空时所有人均无管理权限，每个管理接口独立校验名单。
 
 管理功能：概览、兑换码批次和作废、用户查询和详情、手动加减分钟、北京时间使用统计及 CSV、只读操作记录。余额仍以各用户的 Durable Object 为准，跨用户统计用 D1 汇总；失败写入保留在 DO 的 outbox 中并由 alarm 重试。原有用户下次访问会补齐汇总，也可在后台用户页手动重新汇总。
 
-后台尚未部署；合并代码不等于上线。取得管理员邮箱和单独部署授权后：
+管理后台已于 2026-11-26 部署到 https://admin.dot.cc，0002_admin.sql 已应用，唯一管理员通过线上 ADMIN_EMAILS 密钥配置。线上页面和静态资源返回正常，未登录管理接口返回 401，开发登录返回 404。真实管理员验证码登录后的操作仍待本人验证。
+
+重新部署步骤（修改管理员名单或应用新迁移需相应授权）：
 
 1. `npx wrangler d1 migrations apply DB --remote`（必须先应用 0002_admin.sql，再发布新 Worker）。
 2. `npx wrangler secret put ADMIN_EMAILS`，填入管理员邮箱，逗号分隔。

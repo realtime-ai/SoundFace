@@ -6,9 +6,8 @@
   "main": "src/index.js",
   "compatibility_date": "2026-11-01",
   "routes": [
-    { "pattern": "soundface-api.dot.cc", "custom_domain": true }
-    // Admin console host, to be added at deploy time (not yet):
-    // { "pattern": "admin.dot.cc", "custom_domain": true }
+    { "pattern": "soundface-api.dot.cc", "custom_domain": true },
+    { "pattern": "admin.dot.cc", "custom_domain": true }
   ],
   "workers_dev": false,
   "d1_databases": [

@@ -192,3 +192,10 @@
 - `node --test tests/*.test.cjs`：63 项客户端/桥接测试全部通过。客户端充值记录支持“后台调整”和负数分钟。
 - Playwright 实际浏览器：开发邮箱验证码登录、生成两张 99 分钟码、下载 CSV（核对表头和两条记录）、批次作废确认、用户详情加 3 分钟（10→13）以及对应审计记录均验证通过；概览、使用统计可打开。截图在 output/playwright/admin-*.png（不入库）。
 - 生产尚未应用 0002_admin.sql，也未部署 admin.dot.cc；上线需要管理员邮箱及单独部署授权。操作步骤见 workers/README.md。以上测试均未真实发信或创建付费数字人。
+
+## 2026-11-26 管理后台上线验证
+
+- 经任务 #all:#6 确认部署范围后，应用线上 0002_admin.sql，配置唯一管理员名单，并发布 Worker 版本 a914e2b3-b4f3-4d3b-8b10-e7faaf9fb59a。https://admin.dot.cc 和原 API 域名均绑定同一 Worker。
+- 线上保持 DEV_LOGIN=0、PROVIDER=fake、ALLOW_PAID=0。curl 实测登录页、app.js、style.css 均 200，未登录管理接口 401，开发登录 404，原 API 套餐接口 200。
+- Playwright 打开线上登录页，表单正常显示，截图 output/playwright/admin-production-login.png。站点注入的 Cloudflare 统计脚本被 CSP 拒绝；后台自身脚本和样式加载正常，未放宽 CSP。
+- 本次未读取用户验证码，也未绕过邮箱认证；真实管理员登录、名单外真实账号拒绝访问及登录后的线上管理操作尚未实测。本地权限和操作自动化结果见上一节。未创建付费数字人会话。
