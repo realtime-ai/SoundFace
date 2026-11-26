@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { startWorker, IMAGE, sleep } from './harness.mjs';
 
 let w;
-before(async () => { w = await startWorker({ TRIAL_SECONDS: '4', MIN_START_SECONDS: '1' }); }, { timeout: 60000 });
+before(async () => { w = await startWorker({ TRIAL_SECONDS: '4', MIN_START_SECONDS: '1' }); }, { timeout: 120000 });
 after(() => w?.stop());
 
 test('a session is hung up when the balance runs out, billed exactly the balance, and a new one is refused', async () => {

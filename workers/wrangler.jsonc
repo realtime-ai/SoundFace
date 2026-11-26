@@ -5,18 +5,27 @@
   "name": "soundface-api",
   "main": "src/index.js",
   "compatibility_date": "2026-11-01",
-  "routes": [{ "pattern": "soundface-api.dot.cc", "custom_domain": true }],
+  "routes": [
+    { "pattern": "soundface-api.dot.cc", "custom_domain": true }
+    // Admin console host, to be added at deploy time (not yet):
+    // { "pattern": "admin.dot.cc", "custom_domain": true }
+  ],
   "workers_dev": false,
   "d1_databases": [
     // Production database (APAC), created 2026-11-25.
     { "binding": "DB", "database_name": "soundface", "database_id": "9c788494-e7f6-469a-91e3-37953c8d74b9", "migrations_dir": "migrations" }
   ],
+  // Admin console page (repo-root admin/). The worker runs first and decides by
+  // host (admin.dot.cc) or path (/admin/), see src/index.js.
+  "assets": { "directory": "../admin", "binding": "ASSETS", "run_worker_first": true, "html_handling": "none", "not_found_handling": "none" },
   "durable_objects": { "bindings": [{ "name": "ACCOUNTS", "class_name": "AccountObject" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AccountObject"] }],
   // Arbitrary recipients need an onboarded sending domain; `wrangler dev` only simulates sending.
   "send_email": [{ "name": "EMAIL" }],
   "vars": {
     // Safe production defaults. Development overrides live in .dev.vars (see .dev.vars.example).
+    // ADMIN_EMAILS (admin console allowlist) is a secret: `wrangler secret put ADMIN_EMAILS`
+    // in production, .dev.vars locally. Never list it here.
     "DEV_LOGIN": "0",
     "PROVIDER": "fake",
     "ALLOW_PAID": "0",

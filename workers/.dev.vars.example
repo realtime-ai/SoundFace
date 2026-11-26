@@ -5,3 +5,5 @@ TRIAL_SECONDS=600
 # For a paid Vidu test both are required (and cost money):
 # ALLOW_PAID=1
 # VIDU_API_KEY=vda_...
+# Admin console allowlist (comma-separated email accounts). Production: a secret.
+ADMIN_EMAILS=admin@example.com

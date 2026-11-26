@@ -5,9 +5,15 @@
 //    never more than the provider billed us; sessions without a frame cost 0;
 //  - partial minutes stay in the account (no rounding up);
 //  - redeem codes are one-time; 5 wrong attempts lock redeeming for 15 minutes.
+// Every balance change and finished session is also mirrored to D1 summary
+// tables for the admin console (src/mirror.js): the op goes into an outbox in
+// this object's storage in the same turn, is flushed right away, and is retried
+// from the alarm until D1 accepts it.
 import { DurableObject } from 'cloudflare:workers';
-import { ServiceError, fail, sha256, intVar } from './util.js';
+import { ServiceError, fail, intVar } from './util.js';
 import { makeProvider } from './providers.js';
+import { normalizeCode, hashCode } from './codes.js';
+import { mirrorStatements } from './mirror.js';
 
 const MIN_START_SECONDS = 60;          // need at least 1 credit to start (MIN_START_SECONDS overrides, tests only)
 const CREATE_TIMEOUT_MS = 120000;
@@ -15,8 +21,12 @@ const TICK_MS = 5000;                  // alarm cadence while a session is open
 const POLL_ATTEMPTS = 8, POLL_DELAY_MS = 500;
 const REDEEM_MAX_FAILURES = 5, REDEEM_LOCK_MS = 15 * 60 * 1000;
 const OPEN = ['creating', 'active', 'ending', 'unknown'];
+const MIRROR_VERSION = '1';             // bump to resend everything to D1 once per account
+const MIRROR_CHUNK = 40, MIRROR_MAX_DELAY_MS = 10 * 60 * 1000;
+const SOURCES = ['trial', 'redeem', 'admin'];
+const minutesText = seconds => `${Math.floor(seconds / 60)} 分${seconds % 60 ? ` ${seconds % 60} 秒` : '钟'}`;
 
-export const normalizeCode = code => String(code || '').toUpperCase().replace(/[^0-9A-Z]/g, '').replace(/^SF/, '');
+export { normalizeCode };
 
 export class AccountObject extends DurableObject {
   constructor(ctx, env) {
@@ -24,6 +34,7 @@ export class AccountObject extends DurableObject {
     this.sql = ctx.storage.sql; this.now = () => Date.now(); this.finishing = new Map();
     this.heartbeatTimeoutMs = intVar(env.HEARTBEAT_TIMEOUT_MS, 30000);
     this.minStartSeconds = Math.max(1, intVar(env.MIN_START_SECONDS, MIN_START_SECONDS));
+    this.mirrorRetryMs = Math.max(100, intVar(env.MIRROR_RETRY_MS, 15000)); this.mirrorFailures = 0; this.flushing = null;
     this.sql.exec(`
       CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
       CREATE TABLE IF NOT EXISTS purchases (id TEXT PRIMARY KEY, source TEXT NOT NULL, ref TEXT NOT NULL UNIQUE, seconds INTEGER NOT NULL, note TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL);
@@ -34,13 +45,17 @@ export class AccountObject extends DurableObject {
         end_requested_at INTEGER, ended_at INTEGER, end_reason TEXT NOT NULL DEFAULT '',
         provider_billed INTEGER, billed_seconds INTEGER NOT NULL DEFAULT 0, credits_cost REAL,
         close_reason TEXT NOT NULL DEFAULT '', trace_id TEXT NOT NULL DEFAULT '', settled INTEGER NOT NULL DEFAULT 0);
+      CREATE TABLE IF NOT EXISTS adjustments (purchase_id TEXT PRIMARY KEY, reason TEXT NOT NULL, actor TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS outbox (seq INTEGER PRIMARY KEY AUTOINCREMENT, op TEXT NOT NULL, created_at INTEGER NOT NULL);
     `);
   }
   // Single RPC entry: Workers RPC does not carry custom error fields, so errors
   // come back as data and the router turns them into HTTP responses.
   async call(method, arg) {
-    if (!['ensure', 'account', 'history', 'createSession', 'heartbeat', 'view', 'hangup', 'redeem'].includes(method)) return { ok: false, status: 404, code: 'NOT_FOUND', message: '接口不存在' };
+    if (!['ensure', 'account', 'history', 'createSession', 'heartbeat', 'view', 'hangup', 'redeem', 'adjust', 'sync'].includes(method)) return { ok: false, status: 404, code: 'NOT_FOUND', message: '接口不存在' };
     try {
+      // Accounts created before the D1 mirror existed resend their history once.
+      if (this.meta('id') && this.meta('mirror_version') !== MIRROR_VERSION) await this.sync();
       if (['heartbeat', 'view', 'hangup'].includes(method)) this.own(arg.sessionId);
       const value = method === 'heartbeat' ? this.heartbeat(arg.sessionId, arg) : ['view', 'hangup'].includes(method) ? await this[method](arg.sessionId) : await this[method](arg || {});
       return { ok: true, value };
@@ -77,13 +92,24 @@ export class AccountObject extends DurableObject {
   }
 
   // ---- account ----
-  ensure({ id, name, trialSeconds = 0 }) {
-    if (!this.meta('id')) {
-      this.setMeta('id', id); this.setMeta('created_at', this.now());
-      if (trialSeconds > 0) this.sql.exec('INSERT INTO purchases (id, source, ref, seconds, note, created_at) VALUES (?, ?, ?, ?, ?, ?)', crypto.randomUUID(), 'trial', 'trial', trialSeconds, '新用户试用', this.now());
-    }
-    this.setMeta('name', name);
+  async ensure({ id, name, trialSeconds = 0 }) {
+    this.ctx.storage.transactionSync(() => {
+      if (!this.meta('id')) {
+        this.setMeta('id', id); this.setMeta('created_at', this.now()); this.setMeta('mirror_version', MIRROR_VERSION);
+        if (trialSeconds > 0) this.addPurchase({ source: 'trial', ref: 'trial', seconds: trialSeconds, note: '新用户试用' });
+      }
+      this.setMeta('name', name);
+      this.enqueue({ type: 'summary' });
+    });
+    await this.mirror();
     return this.account();
+  }
+  // Records a balance change and its ledger mirror entry atomically.
+  addPurchase({ source, ref, seconds, note, extra = {} }) {
+    const id = crypto.randomUUID(), at = this.now();
+    this.sql.exec('INSERT INTO purchases (id, source, ref, seconds, note, created_at) VALUES (?, ?, ?, ?, ?, ?)', id, source, ref, seconds, note, at);
+    this.enqueue({ type: 'ledger', row: { id, kind: source, seconds, note, created_at: at, ...extra } }, { type: 'summary' });
+    return id;
   }
   account() {
     const { bought, used, balance } = this.totals(), open = this.openSession();
@@ -154,7 +180,7 @@ export class AccountObject extends DurableObject {
       for (let attempt = 0; attempt < POLL_ATTEMPTS; attempt++) {
         let status = null;
         try { status = await provider.status({ liveId: session.live_id }); } catch { /* retry */ }
-        if (status?.status === 'ended') { this.settle(id, status); return this.view(id); }
+        if (status?.status === 'ended') { this.settle(id, status); await this.mirror(); return this.view(id); }
         await new Promise(resolve => setTimeout(resolve, POLL_DELAY_MS));
       }
       this.update(id, { state: 'unknown' }); await this.schedule();
@@ -170,9 +196,21 @@ export class AccountObject extends DurableObject {
     let billed = this.liveUsage(session, session.end_requested_at || this.now());
     if (providerBilled != null) billed = Math.min(billed, providerBilled);
     billed = Math.min(billed, this.totals().balance);
-    this.update(id, { state: 'ended', settled: 1, ended_at: this.now(), provider_billed: providerBilled, billed_seconds: billed, credits_cost: status.creditsCost ?? null, close_reason: status.closeReason || '', trace_id: status.traceId || '' });
+    this.ctx.storage.transactionSync(() => {
+      this.update(id, { state: 'ended', settled: 1, ended_at: this.now(), provider_billed: providerBilled, billed_seconds: billed, credits_cost: status.creditsCost ?? null, close_reason: status.closeReason || '', trace_id: status.traceId || '' });
+      this.enqueue(...this.sessionOps(this.session(id)), { type: 'summary' });
+    });
   }
-  async schedule() { if (!(await this.ctx.storage.getAlarm())) await this.ctx.storage.setAlarm(this.now() + TICK_MS); }
+  sessionOps(session) {
+    const ops = [{ type: 'session', row: { id: session.id, created_at: session.created_at, first_frame_at: session.first_frame_at, ended_at: session.end_requested_at || session.ended_at, billed_seconds: session.billed_seconds, end_reason: session.end_reason } }];
+    if (session.billed_seconds > 0) ops.push({ type: 'ledger', row: { id: 'charge:' + session.id, kind: 'usage', seconds: -session.billed_seconds, note: '使用扣除', created_at: session.created_at } });
+    return ops;
+  }
+  // The alarm serves both the session tick and mirror retries: keep the earlier one.
+  async schedule(at = this.now() + TICK_MS) {
+    const current = await this.ctx.storage.getAlarm();
+    if (current == null || current > at) await this.ctx.storage.setAlarm(at);
+  }
   // Hang up sessions whose client went quiet or ran out of balance; retry unconfirmed ends.
   async alarm() {
     const now = this.now(), work = [];
@@ -185,7 +223,74 @@ export class AccountObject extends DurableObject {
       if (reason) { this.update(session.id, { state: 'ending', end_reason: reason, end_requested_at: reason === 'client_lost' ? Math.max(session.last_seen_at, session.first_frame_at || 0) : now }); work.push(this.finish(session.id)); }
     }
     await Promise.allSettled(work);
-    if (this.openSession()) await this.ctx.storage.setAlarm(this.now() + TICK_MS);
+    const flushed = await this.flush().catch(() => false), next = [];
+    if (this.openSession()) next.push(this.now() + TICK_MS);
+    if (!flushed) next.push(this.now() + this.mirrorDelay());
+    if (next.length) await this.ctx.storage.setAlarm(Math.min(...next));
+  }
+
+  // ---- D1 mirror (outbox) ----
+  enqueue(...ops) { for (const op of ops) this.sql.exec('INSERT INTO outbox (op, created_at) VALUES (?, ?)', JSON.stringify(op), this.now()); }
+  pendingMirror() { return this.sql.exec('SELECT COUNT(*) AS n FROM outbox').one().n; }
+  mirrorDelay() { return Math.min(MIRROR_MAX_DELAY_MS, this.mirrorRetryMs * 2 ** Math.min(10, Math.max(0, this.mirrorFailures - 1))); }
+  summary() {
+    const { bought, used, balance } = this.totals();
+    return { display_id: this.meta('name') || '', created_at: Number(this.meta('created_at')) || this.now(), balance_seconds: balance, recharged_seconds: bought, used_seconds: used,
+      last_used_at: this.sql.exec('SELECT MAX(created_at) AS t FROM sessions WHERE settled = 1').one().t ?? null };
+  }
+  // Sends the outbox to D1 in order; true when it is empty. One flush at a time.
+  flush() {
+    if (this.flushing) return this.flushing;
+    this.flushing = (async () => {
+      for (;;) {
+        const rows = this.sql.exec('SELECT seq, op FROM outbox ORDER BY seq LIMIT ?', MIRROR_CHUNK).toArray();
+        if (!rows.length) { this.mirrorFailures = 0; return true; }
+        const ops = rows.map(row => JSON.parse(row.op)), last = rows.at(-1).seq;
+        const summary = ops.some(op => op.type === 'summary') ? this.summary() : null;
+        try { await this.env.DB.batch(mirrorStatements(this.env.DB, this.meta('id'), ops, summary, last, this.now())); }
+        catch (error) { this.mirrorFailures++; console.error('[mirror] D1 write failed, will retry:', error.message); return false; }
+        this.sql.exec('DELETE FROM outbox WHERE seq <= ?', last);
+      }
+    })().finally(() => { this.flushing = null; });
+    return this.flushing;
+  }
+  // Flush now; if D1 is unavailable keep the outbox and let the alarm retry.
+  async mirror() {
+    if (!this.meta('id')) return;
+    if (!(await this.flush().catch(() => false))) await this.schedule(this.now() + this.mirrorDelay());
+  }
+  // Resend this account's full history (idempotent). Used once for accounts that
+  // existed before the mirror, and by the admin backfill.
+  async sync() {
+    if (!this.meta('id')) return { pending: 0 };
+    this.ctx.storage.transactionSync(() => {
+      for (const row of this.sql.exec('SELECT p.*, a.reason, a.actor FROM purchases p LEFT JOIN adjustments a ON a.purchase_id = p.id').toArray()) {
+        const hash = row.ref.startsWith('code:') ? row.ref.slice(5) : null;
+        this.enqueue({ type: 'ledger', row: { id: row.id, kind: SOURCES.includes(row.source) ? row.source : 'admin', seconds: row.seconds, note: row.note, created_at: row.created_at, code_hash: hash, code_hint: hash ? row.note.slice(-4) : null, reason: row.reason || '', actor: row.actor || null } });
+      }
+      for (const session of this.sql.exec('SELECT * FROM sessions WHERE settled = 1').toArray()) this.enqueue(...this.sessionOps(session));
+      this.enqueue({ type: 'summary' });
+      this.setMeta('mirror_version', MIRROR_VERSION);
+    });
+    await this.mirror();
+    return { pending: this.pendingMirror() };
+  }
+
+  // ---- admin: manual adjustment (authoritative here, then mirrored) ----
+  async adjust({ seconds, reason, actor }) {
+    if (!this.meta('id')) fail(404, 'USER_NOT_FOUND', '找不到这个用户');
+    if (!Number.isSafeInteger(seconds) || seconds === 0) fail(400, 'BAD_AMOUNT', '请填写要加或减的分钟数');
+    if (!String(reason || '').trim()) fail(400, 'REASON_REQUIRED', '请填写原因');
+    const remaining = this.account().remainingSeconds;
+    if (remaining + seconds < 0) fail(400, 'BELOW_ZERO', `不能减到 0 以下：这个用户现在只剩 ${minutesText(remaining)}`);
+    this.ctx.storage.transactionSync(() => {
+      const ref = 'admin:' + crypto.randomUUID();
+      const id = this.addPurchase({ source: 'admin', ref, seconds, note: '后台调整', extra: { reason, actor } });
+      this.sql.exec('INSERT INTO adjustments (purchase_id, reason, actor) VALUES (?, ?, ?)', id, reason, actor);
+      this.enqueue({ type: 'audit', row: { at: this.now(), actor, action: 'adjust', target: this.meta('id'), detail: { minutes: seconds / 60, balanceAfterSeconds: this.totals().balance }, reason, ref } });
+    });
+    await this.mirror();
+    return { account: this.account(), pendingMirror: this.pendingMirror() };
   }
 
   // ---- redeem codes ----
@@ -193,19 +298,30 @@ export class AccountObject extends DurableObject {
     const lockedUntil = Number(this.meta('redeem_locked_until') || 0);
     if (lockedUntil > this.now()) fail(429, 'REDEEM_LOCKED', `输错次数过多，请 ${Math.ceil((lockedUntil - this.now()) / 60000)} 分钟后再试`);
     const normalized = normalizeCode(code);
-    let row = null;
+    let row = null, hash = null;
     if (normalized.length >= 12 && normalized.length <= 32) {
-      row = await this.env.DB.prepare('UPDATE redeem_codes SET redeemed_by = ?, redeemed_at = ? WHERE code_hash = ? AND redeemed_by IS NULL AND (expires_at IS NULL OR expires_at > ?) RETURNING code_hash, credits, batch')
-        .bind(this.meta('id'), this.now(), await sha256(normalized), this.now()).first();
+      hash = await hashCode(normalized);
+      row = await this.env.DB.prepare('UPDATE redeem_codes SET redeemed_by = ?, redeemed_at = ? WHERE code_hash = ? AND redeemed_by IS NULL AND voided_at IS NULL AND (expires_at IS NULL OR expires_at > ?) RETURNING code_hash, credits, batch')
+        .bind(this.meta('id'), this.now(), hash, this.now()).first();
     }
     if (!row) {
+      // Only after the atomic update missed: say why, if the code exists.
+      const known = hash ? await this.env.DB.prepare('SELECT redeemed_by, voided_at, expires_at FROM redeem_codes WHERE code_hash = ?').bind(hash).first() : null;
+      const [code, message] = !known ? ['REDEEM_INVALID', '兑换码无效，请检查有没有输错']
+        : known.redeemed_by ? ['REDEEM_INVALID', '这个兑换码已经被使用过了']
+        : known.voided_at ? ['REDEEM_VOIDED', '这个兑换码已作废，不能再使用']
+        : ['REDEEM_EXPIRED', '这个兑换码已过期，不能再使用'];
       const failures = Number(this.meta('redeem_failures') || 0) + 1;
       if (failures >= REDEEM_MAX_FAILURES) { this.setMeta('redeem_failures', 0); this.setMeta('redeem_locked_until', this.now() + REDEEM_LOCK_MS); }
       else this.setMeta('redeem_failures', failures);
-      fail(400, 'REDEEM_INVALID', failures >= REDEEM_MAX_FAILURES ? '兑换码无效。输错次数过多，请 15 分钟后再试' : '兑换码无效、已被使用或已过期');
+      fail(400, code, failures >= REDEEM_MAX_FAILURES ? `${message.replace(/[。.]$/, '')}。输错次数过多，请 15 分钟后再试` : message);
     }
     this.setMeta('redeem_failures', 0);
-    this.sql.exec('INSERT INTO purchases (id, source, ref, seconds, note, created_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (ref) DO NOTHING', crypto.randomUUID(), 'redeem', 'code:' + row.code_hash, row.credits * 60, '兑换码 …' + normalized.slice(-4), this.now());
+    const ref = 'code:' + row.code_hash;
+    if (!this.sql.exec('SELECT 1 FROM purchases WHERE ref = ?', ref).toArray().length) {
+      this.ctx.storage.transactionSync(() => this.addPurchase({ source: 'redeem', ref, seconds: row.credits * 60, note: '兑换码 …' + normalized.slice(-4), extra: { code_hash: row.code_hash, code_hint: normalized.slice(-4), batch: row.batch } }));
+      await this.mirror();
+    }
     return { credits: row.credits, account: this.account() };
   }
 }

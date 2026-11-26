@@ -49,7 +49,7 @@ function drawPlans() {
   // "怎么用、怎么收费": purchase and usage history when logged in.
   const time = ms => new Date(ms).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   const duration = seconds => seconds >= 60 ? `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒` : `${seconds} 秒`;
-  const sources = { trial: '新用户赠送', redeem: '兑换码充值' };
+  const sources = { trial: '新用户赠送', redeem: '兑换码充值', admin: '后台调整' };
   function fill(id, rows, empty) {
     const body = $(id).querySelector('tbody'); body.replaceChildren();
     if (!rows.length) { const tr = document.createElement('tr'); const td = document.createElement('td'); td.colSpan = 3; td.className = 'empty'; td.textContent = empty; tr.append(td); body.append(tr); return; }
@@ -60,7 +60,7 @@ function drawPlans() {
     if (!cloudState.account) return;
     try {
       const history = await api.accountHistory();
-      fill('purchase-history', history.purchases.map(item => [time(item.at), sources[item.source] || item.source, `+${item.credits}`]), '还没有充值记录');
+      fill('purchase-history', history.purchases.map(item => [time(item.at), sources[item.source] || item.source, `${item.credits >= 0 ? '+' : '−'}${Math.abs(item.credits)}`]), '还没有充值记录');
       fill('usage-history', history.sessions.map(item => [time(item.startedAt), item.seconds ? duration(item.seconds) : '没出画面，未扣', item.seconds ? `−${item.credits} 分钟` : '0 分钟']), '还没有使用记录');
     } catch (error) { fill('usage-history', [], '记录没有加载出来：' + error.message); }
   });

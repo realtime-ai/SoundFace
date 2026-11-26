@@ -97,3 +97,21 @@ export function loginMethods(env, now) {
   // Production SMS: provider not chosen yet, so there is no production SMS login.
   return methods;
 }
+
+// Bearer token → account id (401 when missing or unknown). Shared by the app API and the admin API.
+export async function authenticate(request, env) {
+  const token = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+  const row = token ? await env.DB.prepare('SELECT user_id FROM tokens WHERE token_hash = ?').bind(await sha256(token)).first() : null;
+  if (!row) fail(401, 'UNAUTHENTICATED', '请先登录');
+  return row.user_id;
+}
+
+// Admin = logged in (401 otherwise) with an EMAIL account listed in ADMIN_EMAILS
+// (comma-separated secret; 403 otherwise). An empty or missing list admits nobody.
+export const adminEmails = env => String(env.ADMIN_EMAILS || '').split(',').map(item => item.trim().toLowerCase()).filter(Boolean);
+export async function authenticateAdmin(request, env) {
+  const userId = await authenticate(request, env);
+  const email = userId.startsWith('email:') ? userId.slice(6) : null;
+  if (!email || !adminEmails(env).includes(email)) fail(403, 'NOT_ADMIN', '这个账号没有管理后台的权限');
+  return email;
+}

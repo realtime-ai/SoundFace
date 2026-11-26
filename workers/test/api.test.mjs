@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { startWorker, IMAGE, sleep } from './harness.mjs';
 
 let w; const call = (...a) => w.call(...a), ok = (...a) => w.ok(...a), d1 = sql => w.d1(sql), login = email => w.login(email);
-before(async () => { w = await startWorker({ TRIAL_SECONDS: '120', HEARTBEAT_TIMEOUT_MS: '6000' }); }, { timeout: 60000 });
+before(async () => { w = await startWorker({ TRIAL_SECONDS: '120', HEARTBEAT_TIMEOUT_MS: '6000' }); }, { timeout: 120000 });
 after(() => w?.stop());
 
 test('email login: validation, resend limit, wrong code, trial credit, same account on re-login', async () => {

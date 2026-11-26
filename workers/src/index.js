@@ -9,27 +9,15 @@
 //   POST /v1/sessions/:id/heartbeat   { frames }                 → session view
 //   POST /v1/sessions/:id/hangup                                 → session view (after upstream confirmation)
 //   GET  /v1/sessions/:id                                        → session view
-import { ServiceError, fail, json, sha256, randomToken, intVar } from './util.js';
-import { loginMethods } from './auth.js';
+// Admin console: API under /admin/v1/... (src/admin.js, admin allowlist on every
+// request) and the page itself (repo-root admin/, served as static assets) at
+// /admin/ on any host, or at / on the admin host (admin.dot.cc in production).
+import { ServiceError, fail, json, sha256, randomToken, intVar, readJson } from './util.js';
+import { loginMethods, authenticate } from './auth.js';
+import { adminRoute } from './admin.js';
+import { adminPagePath, serveAdminPage } from './pages.js';
 import { PLANS, PURCHASE_HINT } from './plans.js';
 export { AccountObject } from './account.js';
-
-const MAX_BODY = 6 * 1024 * 1024; // reference images are ≤ 4 MB before base64
-
-async function readJson(request) {
-  if (Number(request.headers.get('content-length') || 0) > MAX_BODY) fail(413, 'BODY_TOO_LARGE', '请求过大');
-  const text = await request.text();
-  if (text.length > MAX_BODY) fail(413, 'BODY_TOO_LARGE', '请求过大');
-  if (!text) return {};
-  try { return JSON.parse(text); } catch { fail(400, 'BAD_JSON', '请求格式无效'); }
-}
-
-async function authenticate(request, env) {
-  const token = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
-  const row = token ? await env.DB.prepare('SELECT user_id FROM tokens WHERE token_hash = ?').bind(await sha256(token)).first() : null;
-  if (!row) fail(401, 'UNAUTHENTICATED', '请先登录');
-  return row.user_id;
-}
 
 async function account(env, userId, method, arg) {
   const result = await env.ACCOUNTS.get(env.ACCOUNTS.idFromName(userId)).call(method, arg);
@@ -39,6 +27,7 @@ async function account(env, userId, method, arg) {
 
 async function route(request, env) {
   const url = new URL(request.url), parts = url.pathname.split('/').filter(Boolean), method = request.method, now = Date.now();
+  if (parts[0] === 'admin' && parts[1] === 'v1') return adminRoute(request, env, parts.slice(2), url);
   if (parts[0] !== 'v1') fail(404, 'NOT_FOUND', '接口不存在');
   if (parts[1] === 'auth' && parts.length === 4 && method === 'POST') {
     const authenticator = loginMethods(env, () => Date.now()).get(parts[2]);
@@ -73,6 +62,8 @@ async function route(request, env) {
 
 export default {
   async fetch(request, env) {
+    const url = new URL(request.url), page = adminPagePath(url, env);
+    if (page != null) return serveAdminPage(request, env, url, page);
     try { return json(200, await route(request, env)); }
     catch (error) {
       if (error instanceof ServiceError) return json(error.status, { code: error.code, message: error.message });

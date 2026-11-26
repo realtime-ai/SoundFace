@@ -32,3 +32,12 @@ export const maskPhone = phone => phone.slice(0, 3) + '****' + phone.slice(7);
 export const maskEmail = email => { const [local, domain] = email.split('@'); return (local.length <= 2 ? local[0] : local.slice(0, 2)) + '***@' + domain; };
 export const flag = value => value === '1' || value === 'true';
 export const intVar = (value, fallback) => { const number = Number.parseInt(value, 10); return Number.isSafeInteger(number) ? number : fallback; };
+
+const MAX_BODY = 6 * 1024 * 1024; // reference images are ≤ 4 MB before base64
+export async function readJson(request) {
+  if (Number(request.headers.get('content-length') || 0) > MAX_BODY) fail(413, 'BODY_TOO_LARGE', '请求过大');
+  const text = await request.text();
+  if (text.length > MAX_BODY) fail(413, 'BODY_TOO_LARGE', '请求过大');
+  if (!text) return {};
+  try { return JSON.parse(text); } catch { fail(400, 'BAD_JSON', '请求格式无效'); }
+}
