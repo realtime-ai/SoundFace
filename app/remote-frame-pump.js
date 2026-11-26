@@ -1,6 +1,6 @@
 'use strict';
 // Functional-validation transport. The canvas only reads the subscribed remote
-// video, never the local camera or UI. JPEG is capped at 15 fps / 512 KiB.
+// video, never the local camera or UI. JPEG is capped at 30 fps / 512 KiB.
 class RemoteFramePump {
   constructor({ route, send, fail, canvas, now = Date.now, clock = () => performance.now() }) {
     Object.assign(this, { route, send, fail, now, clock });
@@ -16,7 +16,8 @@ class RemoteFramePump {
     const sourceWidth = element.videoWidth || element.width, sourceHeight = element.videoHeight || element.height;
     if (!route || !sourceWidth || !sourceHeight) return;
     const start = this.clock();
-    if (this.busy || start - this.last < 1000 / 15) { this.stats.skipped++; return; }
+    // Allow 2 ms of callback jitter at the 30 fps boundary; work is still single-flight.
+    if (this.busy || start - this.last < 1000 / 30 - 2) { this.stats.skipped++; return; }
     this.last = start; this.busy = true;
     const generation = this.generation, capturedAt = this.now();
     const valid = () => generation === this.generation && this.route()?.frameToken === route.frameToken;

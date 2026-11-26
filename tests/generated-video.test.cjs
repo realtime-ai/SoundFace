@@ -62,3 +62,17 @@ test('stop, stream replacement and stale asynchronous encodes cannot leak a fram
     assert.equal(f.sent.length, 0); assert.equal(f.pump.busy, false);
   }
 });
+
+// A 15 fps cap used to discard every second frame of a 19 fps provider.
+test('provider cadence of 19 fps is relayed without periodic frame loss; 60 fps remains bounded', async () => {
+  for (const [fps, expected] of [[19, 19], [60, 30]]) {
+    const f = pumpSetup();
+    for (let i = 0; i < fps; i++) {
+      f.setTime(1000 + i * 1000 / fps);
+      const work = f.pump.offer(f.element);
+      if (f.pump.busy) f.finish();
+      await work;
+    }
+    assert.equal(f.sent.length, expected);
+  }
+});

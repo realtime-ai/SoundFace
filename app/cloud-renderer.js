@@ -17,7 +17,7 @@ const framePump = new RemoteFramePump({
   send: packet => api.videoFrame(packet),
   fail: async error => { await api.stopVideo().catch(() => {}); message('虚拟摄像头没有收到画面：' + error.message); }
 });
-const localTestSource = new LocalTestSource($('test-preview'));
+const localTestSource = new LocalTestSource($('test-preview'), { fps: 30 });
 const outputIntent = new GeneratedOutputIntent({ start: () => api.startVideo('vidu'), stop: () => api.stopVideo() });
 const frameMetrics = () => ({ frames: frameCount, width: $('cloud-preview').videoWidth, height: $('cloud-preview').videoHeight });
 async function attachGeneratedOutput(generation) {
