@@ -55,7 +55,7 @@
     $('login-submit').disabled = true;
     try {
       const name = await api.login(method, idValue(), $('login-code').value.trim());
-      $('login-dialog').close(); message(`已登录：${name}`);
+      message(`已登录：${name}`); document.dispatchEvent(new CustomEvent('soundface-login')); $('login-dialog').close();
     } catch (error) { hint(error.message, true); $('login-code').select(); }
     finally { $('login-submit').disabled = false; }
   };

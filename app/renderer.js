@@ -16,21 +16,15 @@ function productMessage(text) { return String(text || '').replace(/Vidu/gi, '服
 function message(text, kind = '') { $('message').textContent = productMessage(text); $('message').dataset.kind = text ? kind : ''; $('message').hidden = !text; }
 function draw() {
   const probing = video.running && video.inputUID === 'vidu-probe';
-  $('video-toggle').disabled = busy || audio.privacy || probing || (!video.running && (!cameraAvailable || !$('video-input').value));
-  $('video-toggle').textContent = video.running && !probing ? '停止虚拟摄像头' : '开启虚拟摄像头';
+  // Support-only raw camera output (给客服看的信息 → 排查用). Generated and test output have their own controls.
+  const rawRunning = video.running && !['vidu', 'vidu-probe', 'test-pattern'].includes(video.inputUID);
+  $('raw-output').hidden = !$('show-raw-camera').checked && !rawRunning;
+  $('video-toggle').disabled = busy || audio.privacy || (video.running ? !rawRunning : (!cameraAvailable || !$('video-input').value));
+  $('video-toggle').textContent = rawRunning ? '停止送出真实摄像头' : '送出真实摄像头（会露脸）';
   $('video-input').disabled = video.running || audio.privacy || busy;
-  $('video-badge').textContent = probing ? '检查中' : video.running ? (video.submitted > 0 ? '已开启' : '等待数字人画面') : cameraAvailable ? '已安装' : '未安装';
-  $('video-badge').className = 'tag ' + (video.running ? 'on' : cameraAvailable ? '' : 'warning');
-  if (probing) {
-    $('video-detail').textContent = '正在检查画面传输。';
-    $('video-diagnostic').textContent = `生成画面 → 原生 BGRA / CMSampleBuffer：已转换 ${video.converted || 0} 帧，丢弃 ${video.dropped || 0} 帧。当前为本机验证，未向 CMIO 设备入队。`;
-  } else if (video.running) {
-    $('video-detail').textContent = `正在把${video.inputUID === 'vidu' ? '数字人画面' : video.inputUID === 'test-pattern' ? '测试画面（免费）' : '你的真实画面'}送到虚拟摄像头。`;
-    $('video-diagnostic').textContent = `已入队 ${video.submitted || 0} 帧，丢弃 ${video.dropped || 0} 帧；入队计数不代表会议已收到画面。`;
-  } else {
-    $('video-detail').textContent = cameraAvailable ? '在直播软件或会议软件的摄像头列表里选 SoundFace Camera。停止后观众看到的是“稍后回来”画面。' : '还没安装虚拟摄像头。请先点“安装虚拟摄像头”。';
-    $('video-diagnostic').textContent = '';
-  }
+  if (probing) $('video-diagnostic').textContent = `生成画面 → 原生 BGRA / CMSampleBuffer：已转换 ${video.converted || 0} 帧，丢弃 ${video.dropped || 0} 帧。当前为本机验证，未向 CMIO 设备入队。`;
+  else if (video.running) $('video-diagnostic').textContent = `正在送出：${video.inputUID === 'vidu' ? '数字人画面' : video.inputUID === 'test-pattern' ? '测试画面' : '真实摄像头'} · 已入队 ${video.submitted || 0} 帧，丢弃 ${video.dropped || 0} 帧；入队计数不代表会议已收到画面。`;
+  else $('video-diagnostic').textContent = '';
   $('video-probe').textContent = probing ? '停止检查' : '检查画面传输';
   $('meeting-readiness').textContent = `虚拟摄像头：${cameraAvailable ? '已就绪' : '还没安装'} · 虚拟麦克风：${installed ? '已就绪' : '还没安装'}。`;
   drawCameraInstall();
@@ -58,6 +52,7 @@ function draw() {
   $('preview-label').textContent = audio.privacy ? '隐私暂停中 · 摄像头和麦克风都已关闭' : '观众看到的画面';
   $('summary').textContent = `${audio.running ? audio.muted ? '虚拟麦克风已静音' : '虚拟麦克风已开启' : '虚拟麦克风未开启'} · ${probing ? '检查中' : video.running ? '虚拟摄像头已开启' : stream ? '摄像头预览中' : '摄像头未开启'}`;
   if (typeof cloudDraw === 'function') cloudDraw();
+  if (typeof clipDraw === 'function') clipDraw();
 }
 async function run(action) {
   if (busy) return;
@@ -80,15 +75,12 @@ async function refresh() {
   $('driver-dot').classList.toggle('on', installed);
   $('install').textContent = installed ? '重新安装虚拟麦克风' : '安装虚拟麦克风';
   const previousVideo = $('video-input').value; $('video-input').replaceChildren();
-  const generated = document.createElement('option'); generated.value = 'vidu'; generated.textContent = '数字人画面'; $('video-input').append(generated);
-  const testPattern = document.createElement('option'); testPattern.value = 'test-pattern'; testPattern.textContent = '测试画面（免费）'; $('video-input').append(testPattern);
-  // Raw camera output is a support-only option: hidden unless enabled in 给客服看的信息.
+  // Raw camera output is a support-only option: listed only when enabled in 给客服看的信息.
   for (const camera of $('show-raw-camera').checked ? status.camera.inputs : []) {
     const option = document.createElement('option'); option.value = camera.uid; option.textContent = camera.name + ' · 你的真实画面（会露脸）'; $('video-input').append(option);
   }
   if ([...$('video-input').options].some(option => option.value === previousVideo)) $('video-input').value = previousVideo;
-  if (video.running && video.inputUID !== 'vidu-probe') $('video-input').value = video.inputUID;
-  $('camera-status').textContent = status.camera.deviceVisible ? '在直播软件或会议软件的摄像头列表里选 SoundFace Camera。' : '还没安装虚拟摄像头。';
+  if (video.running && [...$('video-input').options].some(option => option.value === video.inputUID)) $('video-input').value = video.inputUID;
   $('camera-system-status').textContent = status.camera.message || '';
   draw();
 }
@@ -123,7 +115,7 @@ $('audio-toggle').onclick = () => run(async () => {
 });
 $('audio-input').onchange = draw;
 $('video-input').onchange = draw;
-$('video-toggle').onclick = () => run(async () => { if (video.running) await api.stopVideo(); else if ($('video-input').value === 'vidu') await startGeneratedOutput(); else video = await api.startVideo($('video-input').value); });
+$('video-toggle').onclick = () => run(async () => { if (video.running) await api.stopVideo(); else if ($('video-input').value) video = await api.startVideo($('video-input').value); });
 $('show-raw-camera').onchange = () => run(async () => { if (!$('show-raw-camera').checked && video.running && !['vidu', 'vidu-probe', 'test-pattern'].includes(video.inputUID)) await api.stopVideo(); await refresh(); });
 $('video-probe').onclick = () => run(async () => { if (video.running) await api.stopVideo(); else video = await api.startVideo('vidu-probe'); });
 $('camera-activate').onclick = () => run(async () => { cameraInstall = await api.activateCamera(); });
@@ -144,7 +136,7 @@ $('mic-settings').onclick = () => run(() => api.openSettings('microphone'));
 $('guide').onclick = () => $('meeting-dialog').showModal();
 $('close-meeting').onclick = () => $('meeting-dialog').close();
 $('nav-studio').onclick = () => $('stage-column').scrollTo({ top: 0, behavior: 'smooth' });
-$('nav-characters').onclick = () => $('character-library').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+$('nav-characters').onclick = () => $('character-library').scrollIntoView({ behavior: 'smooth', block: 'start' });
 $('cloud-flow').onclick = () => $('cloud-dialog').showModal();
 $('close-dialog').onclick = () => $('cloud-dialog').close();
 api.onVideo(value => { video = value; if (value.error) message(value.error); draw(); });

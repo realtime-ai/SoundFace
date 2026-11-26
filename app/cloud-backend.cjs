@@ -16,7 +16,7 @@ class ProxyBackend {
     let data = {}; try { data = await response.json(); } catch { /* non-JSON error page */ }
     if (!response.ok) {
       const code = String(data.code || 'REQUEST_FAILED').replace(/[^A-Z_]/g, '').slice(0, 60);
-      const messages = { UNAUTHENTICATED: '登录过期了，请重新登录。', QUOTA_EXHAUSTED: '剩余时长不到 1 分钟，请先充值。', SESSION_ACTIVE: '上一次的数字人还没完全停止，请先点“停止数字人”。', UPSTREAM_CREATE_FAILED: '数字人服务暂时用不了，请过一会儿再试。' };
+      const messages = { UNAUTHENTICATED: '登录过期了，请重新登录。', QUOTA_EXHAUSTED: '剩余时长不到 1 分钟，请先充值。', SESSION_ACTIVE: '上一次的数字人还没完全停止，请先关闭虚拟摄像头。', UPSTREAM_CREATE_FAILED: '数字人服务暂时用不了，请过一会儿再试。' };
       // Validation and login messages are authored by our own server; show them as-is.
       const own = [400, 402, 429].includes(response.status) && typeof data.message === 'string' && data.message.length <= 60 ? data.message : '';
       throw Object.assign(new Error(messages[code] || own || `出了点问题，请再试一次。（错误代码：${response.status} · ${code}）`), { code, status: response.status });

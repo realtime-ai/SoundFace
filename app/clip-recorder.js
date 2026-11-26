@@ -1,6 +1,6 @@
 'use strict';
 // Records 9:16 short clips (H.264/AAC MP4 via MediaRecorder) from ClipComposer.
-// Depends on globals: $, api, audio, cloudState, frameCount, lastFrameAt, message.
+// Depends on globals: $, api, audio, video, cloudState, frameCount, lastFrameAt, message.
 (() => {
   const MAX_MS = 60000, FPS = 30;
   // Placeholder until the generated-video latency is measured; see DEVELOPMENT.md.
@@ -16,7 +16,7 @@
   let audioContext = null, timer = null, recorder = null, chunks = [], startedAt = 0, micStream = null, saving = false, lastSource = 'placeholder';
 
   function frame() {
-    const useTest = $('clip-test').checked;
+    const useTest = testSelected();
     const source = chooseLiveSource({ privacy: audio.privacy, testMode: useTest, testRunning: testSource.running, cloudPhase: cloudState.phase, cloudFrames: frameCount, lastFrameAt, now: Date.now() });
     lastSource = composer.render(source, source === 'test' ? testCanvas : source === 'cloud' ? $('cloud-preview') : null, $('selected-character-image'), beforeImage).source;
     if (recorder && Date.now() - startedAt >= MAX_MS) void stop();
@@ -24,7 +24,7 @@
     drawPanel();
   }
   function startLoop() {
-    if ($('clip-test').checked && !testSource.running) testSource.start(() => {});
+    if (testSelected() && !testSource.running) testSource.start(() => {});
     if (timer == null) timer = setInterval(frame, 1000 / FPS);
     $('clip-preview').hidden = false; frame();
   }
@@ -72,19 +72,28 @@
       message((notice ? notice + ' ' : '') + (saved ? '短视频已保存：' + saved : '已取消，这段视频没有保存。'));
     } finally { saving = false; drawPanel(); }
   }
+  // Allowed once the virtual camera shows a real picture, or any time with the test picture.
+  const testSelected = () => $('clip-test').checked || (video.running && video.inputUID === 'test-pattern');
+  const canRecord = () => testSelected() || (cloudState.phase === 'live' && frameCount > 0);
+  const mmss = seconds => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
   function drawPanel() {
     const recording = Boolean(recorder);
-    $('clip-toggle').textContent = saving ? '正在保存…' : recording ? '停止并保存' : '开始录制';
-    $('clip-toggle').disabled = saving || (!recording && audio.privacy);
+    $('clip-toggle-text').textContent = saving ? '正在保存…' : recording ? '停止录制' : '录一段竖屏短视频';
+    $('clip-toggle').classList.toggle('recording', recording);
+    $('clip-toggle').disabled = saving || (!recording && (audio.privacy || !canRecord()));
     for (const id of ['clip-test', 'clip-mic', 'clip-transition']) $(id).disabled = recording || saving;
-    const seconds = recording ? Math.floor((Date.now() - startedAt) / 1000) : 0;
+    const seconds = recording ? Math.min(60, Math.floor((Date.now() - startedAt) / 1000)) : 0;
     const names = { cloud: '数字人画面', test: '测试画面', placeholder: '“稍后回来”画面' };
-    $('clip-badge').textContent = recording ? `录制中 ${seconds} 秒 / 60 秒` : '未录制';
-    $('clip-badge').className = 'tag' + (recording ? ' on' : '');
-    $('clip-detail').textContent = recording
-      ? `正在录：${names[lastSource] || lastSource}。最长 60 秒，到时间自动停止。`
-      : '录成竖屏视频，带“AI 合成”标识。现在是从横屏画面中间裁出来的，清晰度偏低。';
+    $('clip-badge').hidden = !recording;
+    $('clip-badge').textContent = `录制中 ${mmss(seconds)} / 1:00`;
+    $('clip-detail').textContent = recording ? `正在录${names[lastSource] || lastSource}，到 1 分钟自动停止` : saving ? '' : audio.privacy ? '隐私暂停中不能录' : canRecord() ? (testSelected() && !(cloudState.phase === 'live' && frameCount > 0) ? '会录测试画面，不扣分钟' : '录成竖屏视频，最长 1 分钟') : '开启虚拟摄像头后可录（测试画面除外）';
   }
+  window.clipDraw = drawPanel;
+  $('clip-settings-toggle').onclick = () => {
+    const open = $('clip-settings').hidden; $('clip-settings').hidden = !open;
+    $('clip-settings-toggle').setAttribute('aria-expanded', String(open)); $('clip-settings-toggle').textContent = open ? '设置 ⌃' : '设置 ⌄';
+  };
+  $('clip-test').addEventListener('change', drawPanel);
   $('clip-toggle').onclick = async () => {
     try { message(''); if (recorder) await stop(); else await start(); }
     catch (error) { micStream?.getTracks().forEach(track => track.stop()); micStream = null; void audioContext?.close(); audioContext = null; recorder = null; stopLoop(); message(error.message); drawPanel(); }

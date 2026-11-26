@@ -7,7 +7,7 @@
 const { EventEmitter } = require('node:events');
 // Start failures: one plain sentence; the specific cause goes in the error code for support.
 const startFailed = cause => new Error(`数字人没有开起来，请再试一次。（错误代码：${cause}）`);
-const STOP_AGAIN = '上一次的数字人还没完全停止，请先点“停止数字人”。';
+const STOP_AGAIN = '上一次的数字人还没完全停止，请先关闭虚拟摄像头。';
 
 class CloudSession extends EventEmitter {
   constructor({ backend, image, characterExists = id => id === 'qinghe', Socket = globalThis.WebSocket } = {}) {

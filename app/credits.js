@@ -71,7 +71,7 @@ function drawPlans() {
     const tier = left < 5 * 60 ? 5 : left < 30 * 60 ? 30 : null;
     $('balance-warning').hidden = tier == null;
     if (tier != null) $('balance-warning-text').textContent = tier === 5 ? `剩余时长不到 5 分钟（剩 ${Math.floor(left / 60)} 分钟），用完数字人会自动停止。` : `剩余时长不到 30 分钟（剩 ${Math.floor(left / 60)} 分钟），记得充值。`;
-    if (tier != null && tier !== lastTier) message(tier === 5 ? '剩余时长不到 5 分钟，用完数字人会自动停止。' : '剩余时长不到 30 分钟，记得充值。');
+    if (tier != null && tier !== lastTier && ($('message').hidden || $('message').dataset.kind === 'balance')) message(tier === 5 ? '剩余时长不到 5 分钟，用完数字人会自动停止。' : '剩余时长不到 30 分钟，记得充值。', 'balance');
     lastTier = tier;
   }, 1000);
 })();

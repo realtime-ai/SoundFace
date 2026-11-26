@@ -145,3 +145,90 @@ dialog li::marker{color:var(--pink)}
 .billing-history table{width:100%;border-collapse:collapse;font-size:9.5px}.billing-history td,.billing-history th{text-align:left;padding:4px 6px;border-bottom:1px solid var(--line)}.billing-history th{color:var(--sub);font-weight:500}.billing-history td.empty{color:var(--sub);text-align:center}
 .price-title{margin:14px 0 0;font-size:11px;color:var(--sub);font-weight:600}.plan-list{margin-top:6px}.plan{cursor:default;background:transparent;border-style:dashed}#recharge-dialog .purchase-hint{margin:8px 0 14px;color:var(--ink)}
 .support-card>summary{display:flex;align-items:center;gap:6px;cursor:pointer;list-style:none;font-size:11px}.support-card>summary::after{content:'⌄';margin-left:auto;font-size:11px;color:var(--sub)}.support-card[open]>summary::after{content:'⌃'}.support-card h3{font-size:9px;font-weight:600;color:var(--sub);margin:14px 0 0}.support-card>button{margin-top:8px}
+/* ===== 首页 v4（2026-11-25）：产品就是一个虚拟摄像头。右侧只有一张“虚拟摄像头”卡片和一个开关，其余收进“高级”。 ===== */
+.gone{display:none!important}
+.vcam-card{border-color:var(--accent-line)}
+.vcam-card .section-head{margin-bottom:12px}
+.vcam-card h2{font-size:13px}
+.live-dot{width:9px;height:9px;border-radius:50%;background:#ff4d5e;box-shadow:0 0 0 3px #ff4d5e33;flex:none;animation:live-pulse 1.6s ease-in-out infinite}
+@keyframes live-pulse{50%{box-shadow:0 0 0 6px #ff4d5e10}}
+@media (prefers-reduced-motion:reduce){.live-dot{animation:none}}
+.vcam-card .selected-character{padding:10px;border-radius:10px;background:var(--well);border:1px solid var(--line)}
+.vcam-card .selected-character img{width:40px;height:48px}
+.character-actions{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex:none}
+.character-actions .text-button{font-size:10px;font-weight:600;white-space:nowrap}
+.character-actions .text-button:disabled{opacity:.5}
+.vcam-main{margin-top:14px;padding:14px 12px;font-size:15px;font-weight:700;letter-spacing:.5px;border-radius:11px}
+.vcam-main:disabled{filter:grayscale(.45)}
+.billing-note{margin:8px 0 0;text-align:center;font-size:10px;color:var(--sub)}
+.vcam-status{margin:10px 0 0;font-size:10px;line-height:1.6;color:var(--gold);text-align:center}
+.camera-ready{margin-top:14px;padding:11px 12px;border-radius:10px;background:var(--well);border:1px solid var(--line)}
+.camera-ready strong{display:flex;align-items:center;gap:7px;font-size:11px;color:#fff;font-weight:600}
+.camera-ready p{margin:6px 0 0;font-size:10px;line-height:1.7;color:var(--sub)}
+.ok-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#3ddc84;flex:none;box-shadow:0 0 0 3px #3ddc8422}
+.camera-install{margin-top:14px}
+.camera-install .footnote{margin-top:8px}
+.vcam-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.vcam-stats .stat{padding:10px 12px;border-radius:10px;background:var(--well);border:1px solid var(--line);min-width:0}
+.vcam-stats small{display:block;font-size:9.5px;color:var(--sub)}
+.vcam-stats strong{display:block;margin-top:4px;font-size:21px;font-weight:700;color:#fff;font-variant-numeric:tabular-nums;letter-spacing:.3px;white-space:nowrap}
+.vcam-stats strong em{font-style:normal;font-size:13px;font-weight:600}
+.vcam-card .balance-warning{margin-top:10px}
+.vcam-note{margin:10px 0 0;font-size:10px;line-height:1.6;color:var(--sub-light)}
+.vcam-note.danger-note{color:#ff9b9b;font-weight:600}
+.privacy-big{width:100%;margin-top:12px;padding:15px 12px;display:flex;align-items:center;justify-content:center;gap:9px;font-size:15px;font-weight:700;letter-spacing:.5px;border-radius:11px;background:var(--surface-2);border:1px solid var(--line-strong);color:#fff}
+.privacy-big:hover{border-color:var(--gold);background:var(--surface-2)}
+.privacy-big svg{width:19px;height:19px;color:var(--gold)}
+.close-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;font-size:9.5px;color:var(--sub)}
+.close-row span{min-width:0}
+.stop-link{color:#ff6b7a!important;font-size:10px;font-weight:600;white-space:nowrap;flex:none}
+.stop-link:hover{color:#ff9ba5!important;text-decoration:underline}
+.stop-link.retry{padding:6px 10px;border:1px solid #ff6b7a88;border-radius:7px;background:#ff4d5e1a}
+.vcam-confirm{margin-top:10px;padding:11px 12px;border-radius:10px;border:1px solid #ff6b7a66;background:#2a0f1a}
+.vcam-confirm p{margin:0;font-size:10.5px;line-height:1.6;color:#ffd5da}
+.confirm-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:9px}
+.confirm-actions button{padding:6px 12px;font-size:10px}
+.danger-button{background:#d93a4f!important;border-color:#d93a4f!important;color:#fff!important;font-weight:600}
+.danger-button:hover{filter:brightness(1.1)}
+.vcam-card .session-links{margin-top:14px;padding-top:10px;border-top:1px solid var(--line);flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 12px}
+.vcam-card .session-limit{margin:0;font-size:9.5px;text-align:left;color:var(--gold)}
+.vcam-card .session-limit #recharge-open{margin-left:4px;font-weight:600}
+.vcam-info p{margin:0;display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--ink)}
+.vcam-info p strong{font-weight:600}
+.vcam-info .footnote{margin-top:6px;font-size:9.5px;color:var(--sub)}
+/* 高级（默认折叠） */
+.advanced-card>summary{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none;font-size:12px}
+.advanced-card>summary::-webkit-details-marker{display:none}
+.advanced-card>summary strong{color:#fff}
+.summary-note{margin-left:auto;font-size:9px;color:var(--sub);white-space:nowrap}
+.advanced-card>summary::after{content:'›';font-size:14px;color:var(--sub);transition:transform .15s}
+.advanced-card[open]>summary::after{transform:rotate(90deg)}
+.adv-section{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.adv-section .section-head{margin-bottom:8px}
+.adv-section h2{font-size:11px}
+.adv-section .footnote{margin-top:0}
+.adv-section>button.full{margin-top:8px;font-size:10px}
+.test-card .footnote{margin-bottom:2px}
+.raw-output{display:grid;gap:8px;margin-top:6px}
+.raw-output button{font-size:10px}
+.support-card>summary{font-size:11px}
+/* 预览区更大；录短视频压成预览下方的一行 */
+.preview{max-height:calc(100vh - 300px);min-height:320px}
+.preview .clip-preview{position:absolute;left:14px;top:34px;width:68px;height:120px;margin:0;border:1.5px solid #ff4d5e;border-radius:7px;z-index:6;box-shadow:0 6px 18px #000a}
+.clip-row{display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.clip-button{display:flex;align-items:center;gap:7px;padding:7px 12px;font-size:10.5px;white-space:nowrap;flex:none}
+.clip-button .rec-dot{width:7px;height:7px;border-radius:50%;background:var(--sub);flex:none}
+.clip-button:not(:disabled) .rec-dot{background:#ff4d5e}
+.clip-button.recording{background:#3a1220;border-color:#ff4d5e88;color:#ffd5da}
+.clip-button.recording .rec-dot{border-radius:2px}
+#clip-badge{font-variant-numeric:tabular-nums;font-size:10px;padding:5px 8px}
+.clip-hint{flex:1;min-width:0;margin:0;font-size:9.5px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#clip-settings-toggle{font-size:10px;white-space:nowrap;flex:none}
+.clip-settings{display:flex;flex-wrap:wrap;align-items:center;gap:4px 18px;margin-top:8px;padding:10px 12px;border-radius:9px;background:var(--well);border:1px solid var(--line)}
+.clip-settings .live-test-option{margin:0;font-size:10px;color:var(--sub-light)}
+.clip-settings .live-test-option select{width:auto;padding:5px 8px;font-size:10px}
+.clip-settings .footnote{flex-basis:100%;margin:2px 0 0}
+.library-tools{display:flex;align-items:center;gap:8px}
+.vcam-card .session-limit{flex-basis:100%}
+.vcam-card .session-links{justify-content:flex-start;gap:4px 16px}
+.adv-section .live-test-option{font-size:10.5px;color:var(--sub-light);white-space:normal}

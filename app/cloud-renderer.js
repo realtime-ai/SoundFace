@@ -1,5 +1,10 @@
 'use strict';
-let cloudState = { phase: 'idle', billing: 'none', configured: false }, character = 'qinghe';
+let cloudState = { phase: 'idle', billing: 'none', configured: false };
+// Remembered character: first launch uses the default built-in one, later the last one used.
+const CHARACTER_KEY = 'soundface.character', DEFAULT_CHARACTER = 'qinghe';
+let character = (() => { try { return localStorage.getItem(CHARACTER_KEY) || DEFAULT_CHARACTER; } catch { return DEFAULT_CHARACTER; } })();
+const rememberCharacter = () => { try { localStorage.setItem(CHARACTER_KEY, character); } catch { /* Not remembered this time. */ } };
+const ensureCharacter = () => { if (!characters.some(item => item.id === character)) character = characters.some(item => item.id === DEFAULT_CHARACTER) ? DEFAULT_CHARACTER : characters[0]?.id || DEFAULT_CHARACTER; };
 let characters = [{ id: 'qinghe', name: '青禾', thumbnail: '../assets/default-character.jpg', source: 'builtin', description: '自然清爽，保留你的动作与表情。' }], characterFilter = 'all';
 let rtcTransport = 'auto', connectionEvents = [];
 let rtcEngine = null, cloudGeneration = 0, heartbeatTimer = null, frameCallback = null, frameCount = 0, lastFrameAt = 0, awaitingFrameAt = 0;
@@ -14,7 +19,6 @@ const framePump = new RemoteFramePump({
 });
 const localTestSource = new LocalTestSource($('test-preview'));
 const outputIntent = new GeneratedOutputIntent({ start: () => api.startVideo('vidu'), stop: () => api.stopVideo() });
-const wantsGeneratedOutput = () => cameraAvailable && $('video-input').value === 'vidu';
 const frameMetrics = () => ({ frames: frameCount, width: $('cloud-preview').videoWidth, height: $('cloud-preview').videoHeight });
 async function attachGeneratedOutput(generation) {
   try {
@@ -24,16 +28,20 @@ async function attachGeneratedOutput(generation) {
     if (generation === cloudGeneration) { message('虚拟摄像头开启失败：' + error.message); await endCloud('摄像头输出失败'); }
   } finally { draw(); }
 }
-async function startGeneratedOutput() {
-  if (cloudState.phase === 'live') { outputIntent.request(); draw(); await attachGeneratedOutput(cloudGeneration); }
-  else if (!cloudActive()) await beginCloud({ output: true });
-}
 document.addEventListener('securitypolicyviolation', event => {
   let origin = ''; try { origin = new URL(event.blockedURI).origin; } catch { origin = 'non-url'; }
   void api.cloudDiagnostic({ stage: 'csp-' + event.effectiveDirective, code: origin });
 });
 const cloudActive = () => ['creating', 'connecting', 'waiting_frames', 'live', 'stopping'].includes(cloudState.phase);
-const cloudNames = { idle: '数字人未开启', creating: '正在准备数字人…', connecting: '正在连接…', waiting_frames: '已连接，等待数字人画面出现', live: '数字人已开启', stopping: '正在停止…', ended: '数字人已停止', error: '数字人暂时开不了' };
+const cloudNames = { creating: '正在准备…', connecting: '正在连接…', waiting_frames: '等待数字人画面出现', live: '连接正常', stopping: '正在关闭…' };
+// The single "virtual camera" control. It is on while a cloud session runs (or may still bill),
+// or while the free test picture / support-only raw camera feeds SoundFace Camera.
+const stopPending = () => cloudState.billing === 'unknown';
+const testRunning = () => video.running && video.inputUID === 'test-pattern';
+const directOutput = () => video.running && video.inputUID !== 'vidu' && video.inputUID !== 'vidu-probe';
+const vcamOn = () => cloudActive() || stopPending() || directOutput();
+const hms = seconds => { seconds = Math.max(0, Math.floor(seconds)); return [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60].map(value => String(value).padStart(2, '0')).join(':'); };
+let directStartedAt = 0, confirmingStop = false, pendingStart = false;
 const clock = seconds => { seconds = Math.max(0, Math.floor(seconds)); return seconds >= 60 ? `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒` : `${seconds} 秒`; };
 function renderCharacters() {
   const grid = $('character-grid'); grid.replaceChildren();
@@ -61,41 +69,67 @@ function cloudDraw() {
   if (cloudState.closeReason) entries.push('服务端结束原因：' + cloudState.closeReason);
   if (cloudState.traceId) entries.push('追踪 ID：' + cloudState.traceId);
   $('cloud-connection-detail').textContent = entries.join('；') || '尚未连接数字人服务。';
-  if (!video.running && $('video-input').value === 'vidu') {
-    $('video-toggle').disabled = busy || audio.privacy || !cameraAvailable || outputIntent.active || !cloudState.configured || cloudState.billing === 'unknown' || (active && cloudState.phase !== 'live');
-    $('video-toggle').textContent = outputIntent.active ? '正在准备输出…' : cloudState.phase === 'live' ? '开启虚拟摄像头' : '开启数字人并输出';
-    if (outputIntent.active) { $('video-badge').textContent = '等待数字人画面'; $('video-detail').textContent = '数字人画面出现后，会自动送到虚拟摄像头。'; }
-    else if (cloudState.phase === 'live') $('video-detail').textContent = '现在只有你自己能看到。点“开启虚拟摄像头”后，直播软件才能收到数字人画面。';
-    else $('video-detail').textContent = '还没有画面。点“开启数字人”，再到直播软件的摄像头列表里选 SoundFace Camera。';
-  }
   $('video-probe').disabled = busy || audio.privacy || (video.running ? video.inputUID !== 'vidu-probe' : cloudState.phase !== 'live');
   const stats = framePump.stats;
-  $('frame-metrics').textContent = stats.forwarded ? `本次运行累计传递 ${stats.forwarded} 帧 · 当前/最近一轮原生转换 ${video.converted || 0} 帧 · 平均读帧/编码 ${stats.encodeMs.toFixed(1)} ms · IPC/原生处理 ${stats.bridgeMs.toFixed(1)} ms（非端到端延迟）` : '尚未向虚拟摄像头提交生成帧。开启数字人并输出后，这里会显示实际转发计数。';
-  $('cloud-toggle').textContent = cloudState.billing === 'unknown' ? '再点一次停止' : active ? '停止数字人' : wantsGeneratedOutput() ? '开启数字人并输出' : '开启数字人预览';
-  $('cloud-toggle').disabled = cloudState.phase === 'stopping' || audio.privacy || (!active && cloudState.billing !== 'unknown' && (!cloudState.configured || !characters.some(item => item.id === character)));
+  $('frame-metrics').textContent = stats.forwarded ? `本次运行累计传递 ${stats.forwarded} 帧 · 当前/最近一轮原生转换 ${video.converted || 0} 帧 · 平均读帧/编码 ${stats.encodeMs.toFixed(1)} ms · IPC/原生处理 ${stats.bridgeMs.toFixed(1)} ms（非端到端延迟）` : '尚未向虚拟摄像头提交生成帧。开启虚拟摄像头后，这里会显示实际转发计数。';
+  const on = vcamOn(), locked = active || stopPending();
   document.querySelectorAll('[data-character]').forEach(button => {
     button.classList.toggle('selected', button.dataset.character === character);
     button.setAttribute('aria-pressed', String(button.dataset.character === character));
-    button.disabled = active;
+    button.disabled = locked;
   });
   const selected = characters.find(item => item.id === character) || characters[0];
   $('selected-character').textContent = selected.name;
-  $('character-description').textContent = selected.description;
+  $('character-description').textContent = selected.description || (selected.source === 'builtin' ? (selected.tag || '自带角色') : '我添加的角色');
   for (const id of ['selected-character-image', 'idle-character-image']) if ($(id).getAttribute('src') !== selected.thumbnail) $(id).src = selected.thumbnail;
-  $('remove-character').hidden = selected.source !== 'custom'; $('remove-character').disabled = active || cloudState.billing === 'unknown';
-  document.querySelector('[data-action="import"]').disabled = active || cloudState.billing === 'unknown';
+  $('remove-character').hidden = selected.source !== 'custom'; $('remove-character').disabled = locked;
+  $('change-character').disabled = locked; $('library-lock').hidden = !locked;
+  document.querySelector('[data-action="import"]').disabled = locked;
   const account = cloudState.account;
   $('session-limit').textContent = account ? `${account.name} · 剩余 ${Math.floor(account.remainingSeconds / 60)} 分钟` : '登录后可查看剩余时长';
   $('recharge-open').hidden = !account;
-  $('cloud-status').textContent = !cloudState.configured ? '请先登录，再开启数字人。' : (cloudState.phase === 'ended' && !cloudState.frames ? (cloudState.closeReason === 'live_ended' ? '连接断了，没有出画面' : '已停止，没有出画面') : cloudNames[cloudState.phase] || cloudState.phase) + (cloudState.billing === 'unknown' ? ' · 还没完全停止，请再点一次停止' : '');
-  // Main panel: plain time only. Resolution, frame counts and timings go to the support area.
-  if (active && cloudState.frames > 0) {
-    const firstFrameAt = cloudState.startedAt ? cloudState.startedAt + (cloudState.firstFrameMs || 0) : Date.now();
-    $('cloud-metrics').textContent = `已开启 ${clock((Date.now() - firstFrameAt) / 1000)}`;
-  } else if (active) $('cloud-metrics').textContent = '正在使用中，会扣分钟。点“停止数字人”后不再扣。';
-  else if (cloudState.billing === 'ended') $('cloud-metrics').textContent = cloudState.frames > 0 ? (cloudState.billedSeconds != null ? `本次用了 ${clock(cloudState.billedSeconds)}` : '') : '没出画面，没有扣分钟。';
-  else $('cloud-metrics').textContent = '开启后会上传角色照片和摄像头画面，按使用时长扣分钟。';
-  $('cloud-metrics').hidden = !active && cloudState.billing !== 'ended';
+  // State A: one button. Not logged in → it opens login and starts right after.
+  const loggedIn = cloudState.configured && Boolean(account);
+  $('cloud-toggle').textContent = pendingStart ? '登录后会自动开启…' : loggedIn ? '开启虚拟摄像头' : '登录后开启虚拟摄像头';
+  $('cloud-toggle').disabled = busy || audio.privacy || on || (loggedIn && (!cameraAvailable || !characters.some(item => item.id === character)));
+  const lastRun = cloudState.phase === 'ended' && !cloudState.frames ? (cloudState.closeReason === 'live_ended' ? '连接断了，没有出画面，没有扣分钟。' : '已关闭，没有出画面，没有扣分钟。')
+    : cloudState.phase === 'error' ? '数字人暂时开不了，请过一会儿再点“开启虚拟摄像头”。' : '';
+  const idleNote = audio.privacy ? '隐私暂停中。点右上角“退出隐私暂停”后，才能开启虚拟摄像头。' : loggedIn && !cameraAvailable ? '还没安装虚拟摄像头，请先点下面的“安装虚拟摄像头”。' : loggedIn ? lastRun : '';
+  $('cloud-status').textContent = idleNote; $('cloud-status').hidden = !idleNote;
+  const used = cloudState.billing === 'ended' && cloudState.frames > 0 && cloudState.billedSeconds != null ? `上次用了 ${clock(cloudState.billedSeconds)}。` : '';
+  $('cloud-metrics').textContent = used; $('cloud-metrics').hidden = !used || Boolean(idleNote);
+  $('camera-ready').hidden = !cameraAvailable; $('camera-install').hidden = cameraAvailable;
+  // State B: running.
+  if (testRunning() || directOutput()) { if (!directStartedAt) directStartedAt = Date.now(); } else directStartedAt = 0;
+  if (!on) confirmingStop = false;
+  $('vcam-card').dataset.state = on ? 'on' : 'idle';
+  $('vcam-idle').hidden = on; $('vcam-live').hidden = !on; $('vcam-live-stats').hidden = !on; $('vcam-info').hidden = !on;
+  $('vcam-dot').hidden = !on; $('vcam-icon').classList.toggle('gone', on);
+  $('vcam-title').textContent = on ? (stopPending() && !active ? '虚拟摄像头还没完全关闭' : '虚拟摄像头已开启') : '虚拟摄像头';
+  const outputOk = video.running && video.inputUID === 'vidu';
+  const tag = stopPending() ? '还没完全停止' : active ? (cloudState.phase === 'live' && !outputOk ? (outputIntent.active ? '正在送到虚拟摄像头…' : '连接正常') : cloudNames[cloudState.phase] || '正在连接…') : testRunning() ? '测试画面 · 不扣分钟' : directOutput() ? '真实摄像头（排查用）' : '未开启';
+  $('vcam-tag').textContent = tag;
+  $('vcam-tag').className = 'tag' + (on ? (active && cloudState.phase === 'live' || directOutput() ? ' on' : ' warning') : '');
+  if (on) {
+    const firstFrameAt = active && cloudState.frames > 0 && cloudState.startedAt ? cloudState.startedAt + (cloudState.firstFrameMs || 0) : 0;
+    $('vcam-elapsed').textContent = hms(firstFrameAt ? (Date.now() - firstFrameAt) / 1000 : directStartedAt ? (Date.now() - directStartedAt) / 1000 : 0);
+    $('vcam-remaining').textContent = account ? Math.floor(account.remainingSeconds / 60) : '—';
+    const note = stopPending() ? '还没完全停止，请再点一次停止' : active && !cloudState.frames ? '数字人画面出现后才开始扣分钟，没出画面不扣。' : testRunning() ? '正在送测试画面，不扣分钟。' : '';
+    $('vcam-note').textContent = note; $('vcam-note').hidden = !note; $('vcam-note').classList.toggle('danger-note', stopPending());
+    $('vcam-stop').textContent = stopPending() ? '再点一次停止' : testRunning() ? '关闭测试画面' : '关闭虚拟摄像头';
+    $('vcam-stop').classList.toggle('retry', stopPending());
+    $('vcam-stop').disabled = cloudState.phase === 'stopping' || busy;
+    $('vcam-confirm').hidden = !confirmingStop || stopPending();
+    $('vcam-confirm-text').textContent = testRunning() ? '确定关闭测试画面吗？关闭后，观众看到的是“稍后回来”画面。' : '确定关闭虚拟摄像头吗？关闭后，观众看到的是“稍后回来”画面。';
+    $('privacy-big').disabled = audio.privacy;
+    $('vcam-source').textContent = active || stopPending() ? '数字人画面' : testRunning() ? '测试画面（免费，不扣分钟）' : '你的真实画面（排查用，会露脸）';
+    $('vcam-character-line').textContent = active || stopPending() ? `角色：${selected.name}（开启中不能切换）` : testRunning() ? '测试画面不用角色，也不连服务器。' : '只给客服排查用，观众能看到你的真实画面。';
+  }
+  // 高级 → 测试画面
+  $('test-toggle').textContent = testRunning() ? '停止测试画面' : '把测试画面送到虚拟摄像头';
+  $('test-toggle').disabled = busy || audio.privacy || (testRunning() ? false : (on || !cameraAvailable));
+  $('test-badge').textContent = testRunning() ? '正在送出' : cameraAvailable ? '未开启' : '未安装虚拟摄像头';
+  $('test-badge').className = 'tag' + (testRunning() ? ' on' : '');
   if (cloudState.frames > 0 || cloudState.billing === 'ended') {
     const elapsed = cloudState.startedAt ? Math.max(0, (Date.now() - cloudState.startedAt) / 1000).toFixed(0) : 0;
     $('cloud-diagnostic').textContent = `${cloudState.frames > 0 ? `${cloudState.width} × ${cloudState.height} · 已显示 ${cloudState.frames} 帧 · 首帧 ${(cloudState.firstFrameMs / 1000).toFixed(1)} 秒` : '尚未收到生成帧'}${active ? ` · 已运行 ${elapsed} 秒` : ''}${cloudState.billedSeconds != null ? ` · 账单 ${cloudState.billedSeconds} 秒 / ${cloudState.creditsCost} 积分` : ''}`;
@@ -103,11 +137,13 @@ function cloudDraw() {
   $('camera-toggle').disabled = active || audio.privacy;
   $('camera-input').disabled = active || Boolean(stream) || audio.privacy;
   $('preview-empty').querySelector('strong').textContent = active ? '正在准备数字人，请稍等几秒' : '让另一个你，走到镜头前';
-  $('preview-empty').querySelector('p').textContent = active ? '你的真实画面只在右下角小窗里，数字人画面显示在这里' : '选一个角色，点“开启数字人”';
+  $('preview-empty').querySelector('p').textContent = active ? '你的真实画面只在右下角小窗里，数字人画面显示在这里' : '选一个角色，点“开启虚拟摄像头”';
   $('preview-empty').querySelector('span').textContent = active ? '正在连接，只上传摄像头画面，不上传声音' : stream ? '摄像头已开启，小窗只有你自己能看到' : '摄像头未开启';
+  $('preview-badge').className = 'tag';
   if (active) {
-    $('preview-badge').textContent = cloudState.phase === 'live' ? '数字人已开启' : '检查中';
-    $('preview-label').textContent = video.running && video.inputUID === 'vidu' ? 'AI 合成 · 已送到虚拟摄像头' : 'AI 合成 · 仅预览';
+    $('preview-badge').textContent = cloudState.phase === 'live' ? '实时生成' : '连接中';
+    $('preview-badge').className = 'tag' + (cloudState.phase === 'live' ? ' on' : '');
+    $('preview-label').textContent = video.running && video.inputUID === 'vidu' ? 'AI 合成 · 已送到 SoundFace Camera' : 'AI 合成 · 正在送到 SoundFace Camera…';
     $('summary').textContent += ' · 数字人' + (cloudState.phase === 'live' ? '已开启' : '连接中');
   }
   const testing = video.running && video.inputUID === 'test-pattern' && !audio.privacy;
@@ -116,7 +152,7 @@ function cloudDraw() {
   $('test-preview').hidden = !testing;
   if (testing) {
     $('preview-empty').hidden = true; $('ai-label').hidden = true;
-    $('preview-badge').textContent = '测试画面'; $('preview-label').textContent = '测试画面 · 不开摄像头 · 不扣分钟';
+    $('preview-badge').textContent = '测试画面'; $('preview-badge').className = 'tag on'; $('preview-label').textContent = '测试画面 · 不开摄像头 · 不扣分钟';
     $('summary').textContent += ' · 测试画面';
   } else if (!active) $('preview-empty').hidden = false;
   $('pip-label').hidden = $('camera-preview').hidden || audio.privacy;
@@ -182,7 +218,7 @@ async function beginCloud({ output = false } = {}) {
     heartbeatTimer = setInterval(() => {
       const waitingTooLong = !frameCount && Date.now() - awaitingFrameAt > 25000;
       const stalled = frameCount && Date.now() - lastFrameAt > 10000;
-      if (waitingTooLong || stalled) { message(waitingTooLong ? '等了 25 秒没有出画面，已自动停止，没有扣分钟。' : '数字人画面卡住了，已自动停止。请重新开启。'); void endCloud(); return; }
+      if (waitingTooLong || stalled) { message(waitingTooLong ? '等了 25 秒没有出画面，已自动关闭，没有扣分钟。' : '数字人画面卡住了，已自动关闭。请重新点“开启虚拟摄像头”。'); void endCloud(); return; }
       void api.cloudHeartbeat({ frames: frameCount, width: $('cloud-preview').videoWidth, height: $('cloud-preview').videoHeight }).catch(() => {});
     }, 1000);
     engine.on('videoSubscribeStateChanged', (uid, _old, state) => {
@@ -219,7 +255,7 @@ async function beginCloud({ output = false } = {}) {
     engine.on('remoteUserOnLineNotify', uid => { if (String(uid) === transport.renderUid) void api.cloudDiagnostic({ stage: 'render-online', code: 'ok' }); });
     engine.on('connectionStatusChange', (...args) => void api.cloudDiagnostic({ stage: 'rtc-connection', code: args.filter(value => typeof value === 'number').join('-') }));
     engine.on('videoPublishStateChanged', (...args) => void api.cloudDiagnostic({ stage: 'video-publish', code: args.filter(value => typeof value === 'number').join('-') }));
-    engine.on('authInfoExpired', () => { if (generation === cloudGeneration) { message('连接过期了，请重新开启数字人。'); void endCloud(); } });
+    engine.on('authInfoExpired', () => { if (generation === cloudGeneration) { message('连接过期了，请重新点“开启虚拟摄像头”。'); void endCloud(); } });
     engine.on('bye', code => { if (generation === cloudGeneration) void endCloud('rtc-bye-' + code); });
     await engine.joinChannel(transport.token, transport.userId); check();
     void api.cloudDiagnostic({ stage: 'rtc-joined', code: 'ok' });
@@ -235,27 +271,50 @@ async function beginCloud({ output = false } = {}) {
     }
   }
 }
-$('cloud-toggle').onclick = async () => {
-  if (!cloudActive() && cloudState.billing !== 'unknown' && cloudState.account && cloudState.account.remainingSeconds < 60) { openRecharge('剩余时长不到 1 分钟，请先充值。'); return; }
-  try { message(''); if (cloudActive() || cloudState.billing === 'unknown') await endCloud(); else await beginCloud({ output: wantsGeneratedOutput() }); }
-  catch (error) { message(error.message); } finally { draw(); }
-};
-$('cloud-preview').onclick = () => { void $('cloud-preview').play().then(() => message('')).catch(() => message('数字人画面暂时放不出来，请重新开启。')); };
+async function startVirtualCamera() {
+  if (vcamOn() || audio.privacy) return;
+  if (!cloudState.configured || !cloudState.account) { pendingStart = true; draw(); $('account-button').click(); return; }
+  if (cloudState.account.remainingSeconds < 60) { openRecharge('剩余时长不到 1 分钟，请先充值。'); return; }
+  if (!cameraAvailable) throw ownError('还没安装虚拟摄像头。请先点“安装虚拟摄像头”。');
+  rememberCharacter();
+  // One click: start the digital human and send its picture to SoundFace Camera on the first frame.
+  await beginCloud({ output: true });
+}
+async function stopVirtualCamera() {
+  confirmingStop = false;
+  if (cloudActive() || stopPending()) await endCloud();
+  else if (directOutput()) await api.stopVideo();
+}
+const guarded = action => async () => { try { message(''); await action(); } catch (error) { message(error.message); } finally { draw(); } };
+$('cloud-toggle').onclick = guarded(startVirtualCamera);
+// Closing needs a second confirmation, except the "再点一次停止" retry.
+$('vcam-stop').onclick = () => { if (stopPending()) void guarded(stopVirtualCamera)(); else { confirmingStop = true; draw(); $('vcam-confirm-cancel').focus(); } };
+$('vcam-confirm-cancel').onclick = () => { confirmingStop = false; draw(); };
+$('vcam-confirm-ok').onclick = guarded(stopVirtualCamera);
+$('privacy-big').onclick = () => $('privacy').click();
+$('change-character').onclick = () => { $('nav-characters').click(); };
+$('test-toggle').onclick = () => run(async () => { if (testRunning()) await api.stopVideo(); else if (!vcamOn()) { video = await api.startVideo('test-pattern'); $('vcam-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } });
+// Login from the main button starts right after a successful login; closing the dialog cancels.
+const maybeAutoStart = () => { if (pendingStart === 'login' && cloudState.configured && cloudState.account) { pendingStart = false; void guarded(startVirtualCamera)(); } };
+document.addEventListener('soundface-login', () => { if (pendingStart) { pendingStart = 'login'; maybeAutoStart(); } });
+$('login-dialog').addEventListener('close', () => { if (pendingStart === true) { pendingStart = false; draw(); } });
+setInterval(() => { if (vcamOn()) draw(); }, 1000);
+$('cloud-preview').onclick = () => { void $('cloud-preview').play().then(() => message('')).catch(() => message('数字人画面暂时放不出来，请重新点“开启虚拟摄像头”。')); };
 $('character-grid').onclick = async event => {
   const button = event.target.closest('button'); if (!button || button.disabled || cloudActive()) return;
-  if (button.dataset.character) { character = button.dataset.character; draw(); return; }
+  if (button.dataset.character) { character = button.dataset.character; rememberCharacter(); draw(); return; }
   if (button.dataset.action === 'import') {
     button.disabled = true;
     try {
       const result = await api.importCharacter();
-      if (result) { characters = result.characters; character = result.character.id; characterFilter = 'custom'; renderCharacters(); }
+      if (result) { characters = result.characters; character = result.character.id; rememberCharacter(); characterFilter = 'custom'; renderCharacters(); }
     } catch (error) { message(error.message); }
     finally { draw(); }
   }
 };
 document.querySelectorAll('[data-character-filter]').forEach(button => { button.onclick = () => { characterFilter = button.dataset.characterFilter; renderCharacters(); draw(); }; });
 $('remove-character').onclick = async () => {
-  try { characters = await api.removeCharacter(character); character = 'qinghe'; characterFilter = 'all'; renderCharacters(); message('角色已删除，可以在废纸篓里找回。你电脑上的原图没有动。'); }
+  try { characters = await api.removeCharacter(character); character = DEFAULT_CHARACTER; ensureCharacter(); rememberCharacter(); characterFilter = 'all'; renderCharacters(); message('角色已删除，可以在废纸篓里找回。你电脑上的原图没有动。'); }
   catch (error) { message(error.message); }
   draw();
 };
@@ -263,13 +322,13 @@ api.onCloud(state => {
   cloudState = state;
   if (['stopping', 'ended', 'error'].includes(state.phase)) { ++cloudGeneration; void releaseRtc(); }
   if (state.error) message(state.error);
-  draw();
+  draw(); maybeAutoStart();
 });
 api.onCloudDiagnostic(events => { connectionEvents = events; draw(); });
 renderCharacters();
 api.cloudState().then(state => { if (!cloudActive()) { cloudState = state; draw(); } }).catch(() => {});
-api.listCharacters().then(list => { if (Array.isArray(list) && list.length) { characters = list; renderCharacters(); draw(); } }).catch(() => {});
-api.status().then(status => { cloudState = status.cloud; rtcTransport = status.cloud.transport || 'auto'; connectionEvents = status.cloudDiagnostics || []; characters = status.characters || characters; if (cloudState.characterId && characters.some(item => item.id === cloudState.characterId)) character = cloudState.characterId; renderCharacters(); draw(); }).catch(error => message(error.message));
+api.listCharacters().then(list => { if (Array.isArray(list) && list.length) { characters = list; if (!cloudActive()) ensureCharacter(); renderCharacters(); draw(); } }).catch(() => {});
+api.status().then(status => { cloudState = status.cloud; rtcTransport = status.cloud.transport || 'auto'; connectionEvents = status.cloudDiagnostics || []; characters = status.characters || characters; if ((cloudActive() || stopPending()) && cloudState.characterId && characters.some(item => item.id === cloudState.characterId)) character = cloudState.characterId; else ensureCharacter(); renderCharacters(); draw(); }).catch(error => message(error.message));
 let beauty = false;
 $('beauty-toggle').onclick = () => {
   beauty = !beauty; $('beauty-toggle').setAttribute('aria-pressed', String(beauty)); $('beauty-toggle').textContent = beauty ? '美颜 · 试用' : '美颜 · 关闭';

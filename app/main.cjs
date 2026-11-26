@@ -85,7 +85,7 @@ app.whenReady().then(async () => {
     if (!field || typeof id !== 'string' || id.length > 254 || (code !== undefined && (typeof code !== 'string' || code.length > 10))) throw new Error('出了点问题，请再试一次。（错误代码：输入无效）');
     return code === undefined ? { [field]: id } : { [field]: id, code };
   };
-  const requireNoSession = () => { if (cloud.starting || cloud.stopping || cloud.live || cloud.state.billing === 'unknown') throw new Error('请先停止数字人。'); };
+  const requireNoSession = () => { if (cloud.starting || cloud.stopping || cloud.live || cloud.state.billing === 'unknown') throw new Error('请先关闭虚拟摄像头。'); };
   handle('account-code', (method, id) => backend.requestCode(method, loginBody(method, id)));
   handle('account-login', async (method, id, code) => { requireNoSession(); const account = await backend.login(method, loginBody(method, id, code)); saveToken(backend.token); publishAccount(); return account.name; });
   handle('account-redeem', async code => { if (typeof code !== 'string' || code.length > 64) throw new Error('兑换码无效'); const result = await backend.redeem(code); publishAccount(); return { credits: result.credits }; });
@@ -161,7 +161,7 @@ app.whenReady().then(async () => {
     }
     if (!['vidu', 'vidu-probe'].includes(uid)) return video.start(inputUID(uid));
     const liveID = cloud.state.liveId;
-    if (cloud.state.phase !== 'live' || !liveID) throw new Error('请先开启数字人，等画面出现后再试。');
+    if (cloud.state.phase !== 'live' || !liveID) throw new Error('请先开启虚拟摄像头，等数字人画面出现后再试。');
     const state = await video.start(uid, { liveID });
     if (cloud.state.liveId !== liveID || cloud.state.phase !== 'live') { await video.stop(); throw new Error('数字人已停止，请重新开启。'); }
     video.state.frameToken = generatedVideo.arm(liveID); return video.publish();
@@ -172,7 +172,7 @@ app.whenReady().then(async () => {
     if (video.state.running) throw new Error('请先关闭虚拟摄像头，再安装。');
     return cameraExtension.activate();
   });
-  const requireIdleCharacters = () => { if (cloud.starting || cloud.stopping || cloud.live || cloud.state.billing === 'unknown') throw new Error('上一次的数字人还没完全停止，请先点“停止数字人”。'); };
+  const requireIdleCharacters = () => { if (cloud.starting || cloud.stopping || cloud.live || cloud.state.billing === 'unknown') throw new Error('上一次的数字人还没完全停止，请先关闭虚拟摄像头。'); };
   handle('characters-import', async () => {
     requireIdleCharacters();
     const result = await dialog.showOpenDialog(window, { title: '选择角色照片', buttonLabel: '添加角色', properties: ['openFile'], filters: [{ name: '图片（JPG、PNG）', extensions: ['jpg', 'jpeg', 'png'] }] });
