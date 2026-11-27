@@ -199,3 +199,9 @@
 - 线上保持 DEV_LOGIN=0、PROVIDER=fake、ALLOW_PAID=0。curl 实测登录页、app.js、style.css 均 200，未登录管理接口 401，开发登录 404，原 API 套餐接口 200。
 - Playwright 打开线上登录页，表单正常显示，截图 output/playwright/admin-production-login.png。站点注入的 Cloudflare 统计脚本被 CSP 拒绝；后台自身脚本和样式加载正常，未放宽 CSP。
 - 本次未读取用户验证码，也未绕过邮箱认证；真实管理员登录、名单外真实账号拒绝访问及登录后的线上管理操作尚未实测。本地权限和操作自动化结果见上一节。未创建付费数字人会话。
+
+## 2026-11-27 后台域名调整
+
+- 按用户要求替换为 admin.soundface.dot.cc，配置路由、后台主机判断与页面测试同步更新。19 项后端测试及新主机的独立页面测试通过。
+- Worker 版本 5b900295-c528-4522-89da-f29a92e223ab 已发布，新域名已绑定。原 API 域名保留。
+- 新域名 HTTPS 实测握手失败，Cloudflare 对应证书状态 pending_validation，尚未记为可用；需待签发后复测登录页和接口权限。

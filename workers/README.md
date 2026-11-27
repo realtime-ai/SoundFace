@@ -17,13 +17,13 @@ API 已部署到 https://soundface-api.dot.cc（模拟数字人），生产登�
 
 管理功能：概览、兑换码批次和作废、用户查询和详情、手动加减分钟、北京时间使用统计及 CSV、只读操作记录。余额仍以各用户的 Durable Object 为准，跨用户统计用 D1 汇总；失败写入保留在 DO 的 outbox 中并由 alarm 重试。原有用户下次访问会补齐汇总，也可在后台用户页手动重新汇总。
 
-管理后台已于 2026-11-26 部署到 https://admin.dot.cc，0002_admin.sql 已应用，唯一管理员通过线上 ADMIN_EMAILS 密钥配置。线上页面和静态资源返回正常，未登录管理接口返回 401，开发登录返回 404。真实管理员验证码登录后的操作仍待本人验证。
+管理后台于 2026-11-26 上线，2026-11-27 改为 https://admin.soundface.dot.cc（证书签发中，暂未通过 HTTPS 验证），0002_admin.sql 已应用，唯一管理员通过线上 ADMIN_EMAILS 密钥配置。线上页面和静态资源返回正常，未登录管理接口返回 401，开发登录返回 404。真实管理员验证码登录后的操作仍待本人验证。
 
 重新部署步骤（修改管理员名单或应用新迁移需相应授权）：
 
 1. `npx wrangler d1 migrations apply DB --remote`（必须先应用 0002_admin.sql，再发布新 Worker）。
 2. `npx wrangler secret put ADMIN_EMAILS`，填入管理员邮箱，逗号分隔。
-3. 在 `wrangler.jsonc` 的 routes 增加 admin.dot.cc 的 custom_domain 路由。
+3. 在 `wrangler.jsonc` 的 routes 增加 admin.soundface.dot.cc 的 custom_domain 路由。
 4. `npx wrangler deploy`，确认 `DEV_LOGIN=0`、`PROVIDER=fake`、`ALLOW_PAID=0`；先用名单外账号验证拒绝访问，再测真实邮箱收信、登录及后台操作。
 
 `npm test` 串行启动独立本地 workerd，覆盖接口权限、兑换码状态、余额调整、统计对账、跨日归属、汇总重试/回填和审计失败回滚；不创建付费云端会话。

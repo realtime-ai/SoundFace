@@ -4,7 +4,7 @@
 // entry points below. No Cloudflare-only imports, so tests can load this file.
 import { json } from './util.js';
 
-const ADMIN_HOST = 'admin.dot.cc';
+const ADMIN_HOST = 'admin.soundface.dot.cc';
 const PAGE_HEADERS = {
   'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
   'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-cache'

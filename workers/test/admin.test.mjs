@@ -67,10 +67,10 @@ test('admin page is served at /admin/ (and / on the admin host) with a strict CS
   assert.equal((await fetch(w.base + '/app.js')).status, 404, 'assets are not exposed on the API host');
   // Host routing (wrangler dev rewrites the Host header, so checked directly).
   const path = (href, env = {}) => adminPagePath(new URL(href), env);
-  assert.equal(path('https://admin.dot.cc/'), '/'); assert.equal(path('https://admin.dot.cc/app.js'), '/app.js');
-  assert.equal(path('https://admin.dot.cc/admin/app.js'), '/app.js');
-  assert.equal(path('https://admin.dot.cc/v1/auth/email/code'), null, 'the app API also works on the admin host');
-  assert.equal(path('https://admin.dot.cc/admin/v1/overview'), null);
+  assert.equal(path('https://admin.soundface.dot.cc/'), '/'); assert.equal(path('https://admin.soundface.dot.cc/app.js'), '/app.js');
+  assert.equal(path('https://admin.soundface.dot.cc/admin/app.js'), '/app.js');
+  assert.equal(path('https://admin.soundface.dot.cc/v1/auth/email/code'), null, 'the app API also works on the admin host');
+  assert.equal(path('https://admin.soundface.dot.cc/admin/v1/overview'), null);
   assert.equal(path('https://soundface-api.dot.cc/'), null); assert.equal(path('https://soundface-api.dot.cc/app.js'), null);
   assert.equal(path('https://soundface-api.dot.cc/admin/'), '/'); assert.equal(path('https://soundface-api.dot.cc/administrator'), null);
   assert.equal(path('https://other.example/', { ADMIN_HOST: 'other.example' }), '/');

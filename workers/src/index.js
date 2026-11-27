@@ -11,7 +11,7 @@
 //   GET  /v1/sessions/:id                                        → session view
 // Admin console: API under /admin/v1/... (src/admin.js, admin allowlist on every
 // request) and the page itself (repo-root admin/, served as static assets) at
-// /admin/ on any host, or at / on the admin host (admin.dot.cc in production).
+// /admin/ on any host, or at / on the admin host (admin.soundface.dot.cc in production).
 import { ServiceError, fail, json, sha256, randomToken, intVar, readJson } from './util.js';
 import { loginMethods, authenticate } from './auth.js';
 import { adminRoute } from './admin.js';

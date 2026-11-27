@@ -7,7 +7,7 @@
   "compatibility_date": "2026-11-01",
   "routes": [
     { "pattern": "soundface-api.dot.cc", "custom_domain": true },
-    { "pattern": "admin.dot.cc", "custom_domain": true }
+    { "pattern": "admin.soundface.dot.cc", "custom_domain": true }
   ],
   "workers_dev": false,
   "d1_databases": [
@@ -15,7 +15,7 @@
     { "binding": "DB", "database_name": "soundface", "database_id": "9c788494-e7f6-469a-91e3-37953c8d74b9", "migrations_dir": "migrations" }
   ],
   // Admin console page (repo-root admin/). The worker runs first and decides by
-  // host (admin.dot.cc) or path (/admin/), see src/index.js.
+  // host (admin.soundface.dot.cc) or path (/admin/), see src/index.js.
   "assets": { "directory": "../admin", "binding": "ASSETS", "run_worker_first": true, "html_handling": "none", "not_found_handling": "none" },
   "durable_objects": { "bindings": [{ "name": "ACCOUNTS", "class_name": "AccountObject" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AccountObject"] }],
